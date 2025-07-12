@@ -1,82 +1,46 @@
-import React, { memo } from 'react';
-import { Code2, Settings } from 'lucide-react';
+import React from 'react';
 import { BaseNode } from './BaseNode';
+import { Code2, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useGraph } from '@/contexts/GraphContext';
 
-interface OutputParserNodeProps {
-  id: string;
-  data: {
-    label: string;
-    parserType?: string;
-    schema?: any;
+export function OutputParserNode({ id, data, selected }: any) {
+  const { dispatch } = useGraph();
+
+  const handleConfigure = () => {
+    dispatch({ type: 'SELECT_NODE', payload: { id, data, type: 'output-parser' } });
   };
-  selected?: boolean;
-}
 
-export const OutputParserNode = memo(({ id, data, selected }: OutputParserNodeProps) => {
   return (
-    <BaseNode
+    <BaseNode 
       id={id}
       data={{
-        label: data.label,
-        type: 'Output Parser',
+        ...data,
         icon: <Code2 className="w-4 h-4" />,
+        type: 'Output Parser',
         variant: 'parser'
       }}
       selected={selected}
+      showSourceHandle={false}
     >
-      <div className="space-y-3">
-        <div>
-          <label className="text-xs font-medium text-muted-foreground mb-1 block">
-            Parser Type
-          </label>
-          <Select defaultValue={data.parserType || 'json'}>
-            <SelectTrigger className="h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="json">JSON Schema</SelectItem>
-              <SelectItem value="pydantic">Pydantic Model</SelectItem>
-              <SelectItem value="regex">Regex Pattern</SelectItem>
-              <SelectItem value="structured">Structured Output</SelectItem>
-              <SelectItem value="custom">Custom Parser</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div>
-          <label className="text-xs font-medium text-muted-foreground mb-1 block">
-            Expected Fields
-          </label>
-          <div className="space-y-1">
-            {['answer', 'confidence', 'sources', 'metadata'].map((field, index) => (
-              <div key={index} className="flex items-center justify-between text-xs">
-                <span className="text-foreground">{field}</span>
-                <span className="text-muted-foreground">string</span>
-              </div>
-            ))}
+      <div className="space-y-2">
+        <div className="text-xs text-muted-foreground">
+          <div className="flex items-center justify-between">
+            <span>Type: {data.parserType || 'Not configured'}</span>
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              onClick={handleConfigure}
+              className="h-6 w-6 p-0"
+            >
+              <Settings className="w-3 h-3" />
+            </Button>
           </div>
+          {data.schema && Object.keys(data.schema).length > 0 && (
+            <div>Schema: Configured</div>
+          )}
         </div>
-        
-        <div className="p-2 bg-muted/30 rounded text-xs">
-          <div className="font-mono text-foreground mb-1">Preview:</div>
-          <div className="text-muted-foreground font-mono">
-            {`{
-  "answer": "...",
-  "confidence": 0.95,
-  "sources": [...]
-}`}
-          </div>
-        </div>
-        
-        <Button variant="outline" size="sm" className="w-full h-8 text-xs">
-          <Settings className="w-3 h-3 mr-1" />
-          Edit Schema
-        </Button>
       </div>
     </BaseNode>
   );
-});
-
-OutputParserNode.displayName = 'OutputParserNode';
+}

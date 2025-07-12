@@ -1,85 +1,45 @@
-import React, { memo } from 'react';
-import { Database, Settings } from 'lucide-react';
+import React from 'react';
 import { BaseNode } from './BaseNode';
+import { Database, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useGraph } from '@/contexts/GraphContext';
 
-interface RAGRetrieverNodeProps {
-  id: string;
-  data: {
-    label: string;
-    vectorDB?: string;
-    topK?: number;
-    similarityThreshold?: number;
+export function RAGRetrieverNode({ id, data, selected }: any) {
+  const { dispatch } = useGraph();
+
+  const handleConfigure = () => {
+    dispatch({ type: 'SELECT_NODE', payload: { id, data, type: 'rag-retriever', position: { x: 0, y: 0 } } });
   };
-  selected?: boolean;
-}
 
-export const RAGRetrieverNode = memo(({ id, data, selected }: RAGRetrieverNodeProps) => {
   return (
-    <BaseNode
+    <BaseNode 
       id={id}
       data={{
-        label: data.label,
-        type: 'RAG Retriever',
+        ...data,
         icon: <Database className="w-4 h-4" />,
+        type: 'RAG Retriever',
         variant: 'rag'
       }}
       selected={selected}
+      showTargetHandle={false}
     >
-      <div className="space-y-3">
-        <div>
-          <label className="text-xs font-medium text-muted-foreground mb-1 block">
-            Vector Database
-          </label>
-          <Select defaultValue={data.vectorDB || 'pinecone'}>
-            <SelectTrigger className="h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="pinecone">Pinecone</SelectItem>
-              <SelectItem value="faiss">FAISS</SelectItem>
-              <SelectItem value="chroma">ChromaDB</SelectItem>
-              <SelectItem value="weaviate">Weaviate</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">
-              Top K
-            </label>
-            <input
-              type="number"
-              defaultValue={data.topK || 5}
-              className="w-full h-8 px-2 text-xs rounded border border-border bg-background"
-              min="1"
-              max="20"
-            />
+      <div className="space-y-2">
+        <div className="text-xs text-muted-foreground">
+          <div className="flex items-center justify-between">
+            <span>Database: {data.vectorDB || 'Not configured'}</span>
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              onClick={handleConfigure}
+              className="h-6 w-6 p-0"
+            >
+              <Settings className="w-3 h-3" />
+            </Button>
           </div>
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">
-              Threshold
-            </label>
-            <input
-              type="number"
-              defaultValue={data.similarityThreshold || 0.7}
-              step="0.1"
-              min="0"
-              max="1"
-              className="w-full h-8 px-2 text-xs rounded border border-border bg-background"
-            />
-          </div>
+          <div>Top K: {data.topK || 5}</div>
+          <div>Threshold: {data.similarityThreshold || 0.7}</div>
         </div>
-        
-        <Button variant="outline" size="sm" className="w-full h-8 text-xs">
-          <Settings className="w-3 h-3 mr-1" />
-          Configure
-        </Button>
       </div>
     </BaseNode>
   );
-});
-
-RAGRetrieverNode.displayName = 'RAGRetrieverNode';
+}

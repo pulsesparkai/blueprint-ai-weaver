@@ -1,66 +1,62 @@
-import React, { memo } from 'react';
-import { FileText, Settings } from 'lucide-react';
+import React from 'react';
 import { BaseNode } from './BaseNode';
+import { FileText, Settings } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
+import { useGraph } from '@/contexts/GraphContext';
 
-interface PromptTemplateNodeProps {
-  id: string;
-  data: {
-    label: string;
-    template?: string;
-    variables?: string[];
+export function PromptTemplateNode({ id, data, selected }: any) {
+  const { dispatch } = useGraph();
+
+  const handleConfigure = () => {
+    dispatch({ type: 'SELECT_NODE', payload: { id, data, type: 'prompt-template' } });
   };
-  selected?: boolean;
-}
 
-export const PromptTemplateNode = memo(({ id, data, selected }: PromptTemplateNodeProps) => {
   return (
-    <BaseNode
+    <BaseNode 
       id={id}
       data={{
-        label: data.label,
-        type: 'Prompt Template',
+        ...data,
         icon: <FileText className="w-4 h-4" />,
+        type: 'Prompt Template',
         variant: 'prompt'
       }}
       selected={selected}
     >
       <div className="space-y-3">
-        <div>
-          <label className="text-xs font-medium text-muted-foreground mb-1 block">
-            Template
-          </label>
-          <Textarea
-            defaultValue={data.template || 'You are a helpful assistant. {context}\n\nUser: {question}\nAssistant:'}
-            className="min-h-[80px] text-xs resize-none"
-            placeholder="Enter your prompt template with {variables}..."
-          />
-        </div>
-        
-        <div>
-          <label className="text-xs font-medium text-muted-foreground mb-1 block">
-            Variables
-          </label>
-          <div className="flex flex-wrap gap-1">
-            {(data.variables || ['context', 'question']).map((variable, index) => (
-              <span
-                key={index}
-                className="inline-flex items-center px-2 py-1 rounded text-xs bg-success/10 text-success border border-success/20"
-              >
-                {variable}
-              </span>
-            ))}
+        <div className="text-xs text-muted-foreground">
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-medium">Template Preview</span>
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              onClick={handleConfigure}
+              className="h-6 w-6 p-0"
+            >
+              <Settings className="w-3 h-3" />
+            </Button>
+          </div>
+          <div className="p-2 bg-muted/50 rounded text-xs font-mono max-h-16 overflow-hidden">
+            {data.template?.substring(0, 60) || 'No template configured'}
+            {data.template?.length > 60 && '...'}
           </div>
         </div>
         
-        <Button variant="outline" size="sm" className="w-full h-8 text-xs">
-          <Settings className="w-3 h-3 mr-1" />
-          Edit Template
-        </Button>
+        {data.variables && data.variables.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {data.variables.slice(0, 3).map((variable: string, index: number) => (
+              <Badge key={index} variant="secondary" className="text-xs">
+                {`{${variable}}`}
+              </Badge>
+            ))}
+            {data.variables.length > 3 && (
+              <Badge variant="secondary" className="text-xs">
+                +{data.variables.length - 3}
+              </Badge>
+            )}
+          </div>
+        )}
       </div>
     </BaseNode>
   );
-});
-
-PromptTemplateNode.displayName = 'PromptTemplateNode';
+}

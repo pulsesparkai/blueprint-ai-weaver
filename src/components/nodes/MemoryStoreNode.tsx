@@ -1,85 +1,44 @@
-import React, { memo } from 'react';
-import { Brain, Settings } from 'lucide-react';
+import React from 'react';
 import { BaseNode } from './BaseNode';
+import { Brain, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useGraph } from '@/contexts/GraphContext';
 
-interface MemoryStoreNodeProps {
-  id: string;
-  data: {
-    label: string;
-    storeType?: string;
-    maxTokens?: number;
-    ttl?: number;
+export function MemoryStoreNode({ id, data, selected }: any) {
+  const { dispatch } = useGraph();
+
+  const handleConfigure = () => {
+    dispatch({ type: 'SELECT_NODE', payload: { id, data, type: 'memory-store' } });
   };
-  selected?: boolean;
-}
 
-export const MemoryStoreNode = memo(({ id, data, selected }: MemoryStoreNodeProps) => {
   return (
-    <BaseNode
+    <BaseNode 
       id={id}
       data={{
-        label: data.label,
-        type: 'Memory Store',
+        ...data,
         icon: <Brain className="w-4 h-4" />,
+        type: 'Memory Store',
         variant: 'memory'
       }}
       selected={selected}
     >
-      <div className="space-y-3">
-        <div>
-          <label className="text-xs font-medium text-muted-foreground mb-1 block">
-            Store Type
-          </label>
-          <Select defaultValue={data.storeType || 'redis'}>
-            <SelectTrigger className="h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="redis">Redis</SelectItem>
-              <SelectItem value="memory">In-Memory</SelectItem>
-              <SelectItem value="postgres">PostgreSQL</SelectItem>
-              <SelectItem value="mongodb">MongoDB</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">
-              Max Tokens
-            </label>
-            <input
-              type="number"
-              defaultValue={data.maxTokens || 2000}
-              className="w-full h-8 px-2 text-xs rounded border border-border bg-background"
-              min="100"
-              max="10000"
-              step="100"
-            />
+      <div className="space-y-2">
+        <div className="text-xs text-muted-foreground">
+          <div className="flex items-center justify-between">
+            <span>Store: {data.storeType || 'Not configured'}</span>
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              onClick={handleConfigure}
+              className="h-6 w-6 p-0"
+            >
+              <Settings className="w-3 h-3" />
+            </Button>
           </div>
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">
-              TTL (mins)
-            </label>
-            <input
-              type="number"
-              defaultValue={data.ttl || 60}
-              className="w-full h-8 px-2 text-xs rounded border border-border bg-background"
-              min="1"
-              max="1440"
-            />
-          </div>
+          <div>Max Tokens: {data.maxTokens || 2000}</div>
+          <div>TTL: {data.ttl || 60}min</div>
         </div>
-        
-        <Button variant="outline" size="sm" className="w-full h-8 text-xs">
-          <Settings className="w-3 h-3 mr-1" />
-          Configure
-        </Button>
       </div>
     </BaseNode>
   );
-});
-
-MemoryStoreNode.displayName = 'MemoryStoreNode';
+}
