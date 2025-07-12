@@ -170,6 +170,115 @@ export type Database = {
         }
         Relationships: []
       }
+      simulation_logs: {
+        Row: {
+          blueprint_id: string
+          completed_at: string | null
+          context_window: Json
+          error_message: string | null
+          execution_steps: Json
+          execution_time_ms: number | null
+          final_output: string | null
+          id: string
+          input_query: string
+          llm_provider: string
+          metrics: Json
+          pipeline_config: Json
+          session_id: string
+          started_at: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          blueprint_id: string
+          completed_at?: string | null
+          context_window?: Json
+          error_message?: string | null
+          execution_steps?: Json
+          execution_time_ms?: number | null
+          final_output?: string | null
+          id?: string
+          input_query: string
+          llm_provider: string
+          metrics?: Json
+          pipeline_config?: Json
+          session_id: string
+          started_at?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          blueprint_id?: string
+          completed_at?: string | null
+          context_window?: Json
+          error_message?: string | null
+          execution_steps?: Json
+          execution_time_ms?: number | null
+          final_output?: string | null
+          id?: string
+          input_query?: string
+          llm_provider?: string
+          metrics?: Json
+          pipeline_config?: Json
+          session_id?: string
+          started_at?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "simulation_logs_blueprint_id_fkey"
+            columns: ["blueprint_id"]
+            isOneToOne: false
+            referencedRelation: "blueprints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      simulation_metrics: {
+        Row: {
+          cost_usd: number | null
+          created_at: string
+          id: string
+          latency_ms: number | null
+          model_name: string | null
+          simulation_id: string
+          step_name: string
+          tokens_input: number | null
+          tokens_output: number | null
+        }
+        Insert: {
+          cost_usd?: number | null
+          created_at?: string
+          id?: string
+          latency_ms?: number | null
+          model_name?: string | null
+          simulation_id: string
+          step_name: string
+          tokens_input?: number | null
+          tokens_output?: number | null
+        }
+        Update: {
+          cost_usd?: number | null
+          created_at?: string
+          id?: string
+          latency_ms?: number | null
+          model_name?: string | null
+          simulation_id?: string
+          step_name?: string
+          tokens_input?: number | null
+          tokens_output?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "simulation_metrics_simulation_id_fkey"
+            columns: ["simulation_id"]
+            isOneToOne: false
+            referencedRelation: "simulation_logs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -178,6 +287,10 @@ export type Database = {
       cleanup_expired_sessions: {
         Args: Record<PropertyKey, never>
         Returns: number
+      }
+      complete_simulation: {
+        Args: { sim_id: string; final_result?: string; error_msg?: string }
+        Returns: undefined
       }
     }
     Enums: {

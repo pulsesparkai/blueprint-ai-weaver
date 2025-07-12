@@ -97,6 +97,7 @@ export function ContextEngineApp({ blueprint }: { blueprint?: any }) {
               <SimulatorPane
                 isCollapsed={simulatorCollapsed}
                 onToggle={() => setSimulatorCollapsed(!simulatorCollapsed)}
+                blueprintId={blueprint?.id}
               />
             </div>
           </div>
