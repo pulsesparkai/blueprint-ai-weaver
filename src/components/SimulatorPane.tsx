@@ -171,8 +171,9 @@ export function SimulatorPane({ isCollapsed, onToggle, blueprintId }: SimulatorP
       status: 'pending' as const
     }));
     
+    const sessionId = generateSessionId();
     setCurrentSimulation({
-      id: generateSessionId(),
+      id: sessionId,
       status: 'running',
       steps: initialSteps,
       totalMetrics: {
@@ -184,28 +185,61 @@ export function SimulatorPane({ isCollapsed, onToggle, blueprintId }: SimulatorP
     });
 
     try {
-      const { data, error } = await supabase.functions.invoke('pipeline-simulator', {
+      // Use the enhanced LangChain blueprint executor
+      const { data, error } = await supabase.functions.invoke('langchain-blueprint-executor', {
         body: {
           blueprintId,
-          inputQuery: input,
-          llmProvider: selectedModel,
-          apiKey: mockMode ? 'mock-key' : apiKey,
-          sessionId: currentSimulation?.id,
-          mockMode,
-          pipelineConfig: {
-            nodes: state.nodes,
-            edges: state.edges
-          }
+          input,
+          userId: user?.id
         }
       });
 
       if (error) throw error;
+
+      const { executionSteps, metrics, output } = data;
       
-      // The rest will be handled by real-time updates
+      // Update simulation state with results
+      setCurrentSimulation({
+        id: sessionId,
+        status: 'completed',
+        steps: executionSteps.map((step: any) => ({
+          stepName: step.nodeType,
+          status: step.error ? 'error' : 'completed',
+          output: step.output,
+          metrics: step.tokens ? {
+            tokensInput: step.tokens.input || 0,
+            tokensOutput: step.tokens.output || 0,
+            latencyMs: step.executionTime || 0,
+            costUsd: (step.tokens.total || 0) * 0.00002
+          } : undefined,
+          error: step.error
+        })),
+        finalOutput: output,
+        totalMetrics: {
+          totalTokens: metrics.totalTokens || 0,
+          totalCost: metrics.totalCost || 0,
+          executionTime: metrics.totalTime || 0
+        },
+        contextWindow: []
+      });
+      
+      setIsRunning(false);
+      setProgress(100);
+      setActiveTab('results');
+      
+      toast({
+        title: "Simulation Completed",
+        description: `Pipeline executed successfully with ${executionSteps.length} steps`,
+      });
+      
+      // Reload history
+      loadSimulationHistory();
+      
     } catch (error: any) {
       console.error('Simulation error:', error);
       setIsRunning(false);
       setProgress(0);
+      setCurrentSimulation(prev => prev ? { ...prev, status: 'error' } : null);
       toast({
         title: "Simulation Failed",
         description: error.message,

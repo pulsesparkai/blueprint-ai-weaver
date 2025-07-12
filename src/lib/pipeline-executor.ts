@@ -1,4 +1,5 @@
 import { Node, Edge } from '@xyflow/react';
+import { supabase } from '@/integrations/supabase/client';
 import { 
   InputExecutor, 
   LLMExecutor, 
@@ -22,11 +23,13 @@ export interface NodeConfig {
 }
 
 export interface ExecutionStatus {
-  nodeId: string;
+  nodeId?: string;
   status: 'pending' | 'running' | 'success' | 'error';
   error?: string;
   executionTime?: number;
   data?: any;
+  tokens?: any;
+  context?: any;
 }
 
 export type StatusUpdateCallback = (statuses: Map<string, ExecutionStatus>) => void;
@@ -150,103 +153,193 @@ export class PipelineExecutor {
     edges: Edge[], 
     onStatusUpdate?: StatusUpdateCallback
   ): Promise<Map<string, ExecutionStatus>> {
+    this.executionStatuses.clear();
+    this.nodeData.clear();
+    
     try {
-      // Reset state
-      this.executionStatuses.clear();
-      this.nodeData.clear();
+      // Check if we should use LangChain executor (for complex pipelines)
+      const shouldUseLangChain = nodes.some(node => 
+        ['promptTemplate', 'ragRetriever', 'outputParser', 'memoryStore', 'stateTracker'].includes(node.type)
+      );
 
-      // Initialize all nodes as pending
-      nodes.forEach(node => {
-        this.executionStatuses.set(node.id, {
-          nodeId: node.id,
-          status: 'pending'
-        });
+      if (shouldUseLangChain) {
+        return await this.executeLangChainPipeline(nodes, edges, onStatusUpdate);
+      }
+
+      // Fallback to original executor for simple pipelines
+      return await this.executeTraditionalPipeline(nodes, edges, onStatusUpdate);
+    } catch (error: any) {
+      throw new Error(`Pipeline execution failed: ${error.message}`);
+    }
+  }
+
+  private async executeLangChainPipeline(
+    nodes: Node[], 
+    edges: Edge[], 
+    onStatusUpdate?: StatusUpdateCallback
+  ): Promise<Map<string, ExecutionStatus>> {
+    // Initialize all nodes as pending
+    const statuses = new Map<string, ExecutionStatus>();
+    nodes.forEach(node => {
+      statuses.set(node.id, { status: 'pending' });
+    });
+    onStatusUpdate?.(statuses);
+
+    try {
+      // Get current user ID (this should be passed from the auth context)
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      // Use the new LangChain-powered pipeline executor
+      const response = await supabase.functions.invoke('pipeline-executor', {
+        body: {
+          nodes: nodes.map(node => ({
+            id: node.id,
+            type: node.type,
+            data: node.data,
+            position: node.position
+          })),
+          edges: edges.map(edge => ({
+            id: edge.id,
+            source: edge.source,
+            target: edge.target,
+            sourceHandle: edge.sourceHandle,
+            targetHandle: edge.targetHandle
+          })),
+          input: this.getInitialInput(nodes, edges),
+          userId: user.id
+        }
       });
 
-      // Get execution order
-      const executionOrder = this.topologicalSort(nodes, edges);
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+
+      const { results, finalOutput, context } = response.data;
       
-      // Create status update callback for individual nodes
-      const nodeStatusUpdate = (nodeId: string, status: 'pending' | 'running' | 'success' | 'error', data?: any) => {
-        const currentStatus = this.executionStatuses.get(nodeId);
-        if (currentStatus) {
-          this.executionStatuses.set(nodeId, {
-            ...currentStatus,
-            status,
-            data
-          });
-          if (onStatusUpdate) {
-            onStatusUpdate(new Map(this.executionStatuses));
-          }
-        }
-      };
-      
-      // Execute nodes in order
-      for (const nodeId of executionOrder) {
-        const node = nodes.find(n => n.id === nodeId);
-        if (!node) continue;
+      // Convert results to ExecutionStatus format
+      Object.entries(results).forEach(([nodeId, result]: [string, any]) => {
+        statuses.set(nodeId, {
+          status: result.success ? 'success' : 'error',
+          data: result.data,
+          error: result.error,
+          executionTime: result.executionTime,
+          tokens: result.tokens,
+          context: result.context || context
+        });
+        this.nodeData.set(nodeId, result.data);
+      });
 
-        try {
-          // Get input data from predecessor nodes
-          const inputNodeIds = this.getNodeInputs(nodeId, edges);
-          const inputs = inputNodeIds
-            .map(inputId => this.nodeData.get(inputId))
-            .filter(Boolean);
+      this.executionStatuses = statuses;
+      onStatusUpdate?.(statuses);
+      return statuses;
+    } catch (error: any) {
+      // Mark all nodes as error
+      nodes.forEach(node => {
+        statuses.set(node.id, {
+          status: 'error',
+          error: error.message
+        });
+      });
+      onStatusUpdate?.(statuses);
+      throw error;
+    }
+  }
 
-          // Execute the node
-          const result = await this.executeNode(node, inputs, nodeStatusUpdate);
+  private async executeTraditionalPipeline(
+    nodes: Node[], 
+    edges: Edge[], 
+    onStatusUpdate?: StatusUpdateCallback
+  ): Promise<Map<string, ExecutionStatus>> {
+    // Initialize all nodes as pending
+    nodes.forEach(node => {
+      this.executionStatuses.set(node.id, {
+        nodeId: node.id,
+        status: 'pending'
+      });
+    });
 
-          // Update status based on result
-          if (result.success) {
-            this.nodeData.set(nodeId, result.data);
-            this.executionStatuses.set(nodeId, {
-              nodeId,
-              status: 'success',
-              executionTime: result.executionTime,
-              data: result.data
-            });
-          } else {
-            this.executionStatuses.set(nodeId, {
-              nodeId,
-              status: 'error',
-              error: result.error,
-              executionTime: result.executionTime
-            });
-          }
-
-        } catch (error) {
-          this.executionStatuses.set(nodeId, {
-            nodeId,
-            status: 'error',
-            error: error instanceof Error ? error.message : 'Unknown execution error'
-          });
-        }
-
+    // Get execution order
+    const executionOrder = this.topologicalSort(nodes, edges);
+    
+    // Create status update callback for individual nodes
+    const nodeStatusUpdate = (nodeId: string, status: 'pending' | 'running' | 'success' | 'error', data?: any) => {
+      const currentStatus = this.executionStatuses.get(nodeId);
+      if (currentStatus) {
+        this.executionStatuses.set(nodeId, {
+          ...currentStatus,
+          status,
+          data
+        });
         if (onStatusUpdate) {
           onStatusUpdate(new Map(this.executionStatuses));
         }
       }
+    };
+    
+    // Execute nodes in order
+    for (const nodeId of executionOrder) {
+      const node = nodes.find(n => n.id === nodeId);
+      if (!node) continue;
 
-      return new Map(this.executionStatuses);
+      try {
+        // Get input data from predecessor nodes
+        const inputNodeIds = this.getNodeInputs(nodeId, edges);
+        const inputs = inputNodeIds
+          .map(inputId => this.nodeData.get(inputId))
+          .filter(Boolean);
 
-    } catch (error) {
-      // Mark all pending/running nodes as error
-      this.executionStatuses.forEach((status, nodeId) => {
-        if (status.status === 'pending' || status.status === 'running') {
+        // Execute the node
+        const result = await this.executeNode(node, inputs, nodeStatusUpdate);
+
+        // Update status based on result
+        if (result.success) {
+          this.nodeData.set(nodeId, result.data);
+          this.executionStatuses.set(nodeId, {
+            nodeId,
+            status: 'success',
+            executionTime: result.executionTime,
+            data: result.data
+          });
+        } else {
           this.executionStatuses.set(nodeId, {
             nodeId,
             status: 'error',
-            error: error instanceof Error ? error.message : 'Pipeline execution failed'
+            error: result.error,
+            executionTime: result.executionTime
           });
         }
-      });
+
+      } catch (error) {
+        this.executionStatuses.set(nodeId, {
+          nodeId,
+          status: 'error',
+          error: error instanceof Error ? error.message : 'Unknown execution error'
+        });
+      }
 
       if (onStatusUpdate) {
         onStatusUpdate(new Map(this.executionStatuses));
       }
-
-      throw error;
     }
+
+    return new Map(this.executionStatuses);
+  }
+
+  private getInitialInput(nodes: Node[], edges: Edge[]): string {
+    // Find the starting node (node with no incoming edges)
+    const nodeIds = nodes.map(n => n.id);
+    const targetNodes = new Set(edges.map(e => e.target));
+    const startingNodes = nodeIds.filter(id => !targetNodes.has(id));
+    
+    if (startingNodes.length > 0) {
+      const startingNode = nodes.find(n => n.id === startingNodes[0]);
+      return String(startingNode?.data?.input || startingNode?.data?.template || 'Hello, world!');
+    }
+    
+    return 'Hello, world!';
   }
 
   getExecutionResults(): Map<string, ExecutionStatus> {
