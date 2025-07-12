@@ -358,7 +358,7 @@ export function NodeConfigModal() {
                 {selectedNode.data.icon as React.ReactNode}
               </div>
             )}
-            Configure {selectedNode.data.label}
+            Configure {(selectedNode.data.label || selectedNode.data.type) as string}
           </DialogTitle>
         </DialogHeader>
         

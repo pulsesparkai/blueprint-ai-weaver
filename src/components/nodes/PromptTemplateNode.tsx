@@ -9,7 +9,7 @@ export function PromptTemplateNode({ id, data, selected }: any) {
   const { dispatch } = useGraph();
 
   const handleConfigure = () => {
-    dispatch({ type: 'SELECT_NODE', payload: { id, data, type: 'prompt-template' } });
+    dispatch({ type: 'SELECT_NODE', payload: { id, data, type: 'prompt-template', position: { x: 0, y: 0 } } });
   };
 
   return (

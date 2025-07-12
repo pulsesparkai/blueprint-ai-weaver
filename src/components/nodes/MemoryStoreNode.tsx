@@ -8,7 +8,7 @@ export function MemoryStoreNode({ id, data, selected }: any) {
   const { dispatch } = useGraph();
 
   const handleConfigure = () => {
-    dispatch({ type: 'SELECT_NODE', payload: { id, data, type: 'memory-store' } });
+    dispatch({ type: 'SELECT_NODE', payload: { id, data, type: 'memory-store', position: { x: 0, y: 0 } } });
   };
 
   return (

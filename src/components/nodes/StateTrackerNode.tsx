@@ -8,7 +8,7 @@ export function StateTrackerNode({ id, data, selected }: any) {
   const { dispatch } = useGraph();
 
   const handleConfigure = () => {
-    dispatch({ type: 'SELECT_NODE', payload: { id, data, type: 'state-tracker' } });
+    dispatch({ type: 'SELECT_NODE', payload: { id, data, type: 'state-tracker', position: { x: 0, y: 0 } } });
   };
 
   return (
