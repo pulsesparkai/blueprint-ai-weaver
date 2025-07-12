@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ReactFlow,
   Background,
@@ -15,6 +15,13 @@ import {
   Position,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { X, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Slider } from '@/components/ui/slider';
 
 // Node component for different types
 const CustomNode = ({ data, id }: { data: any; id: string }) => {
@@ -86,10 +93,263 @@ const Sidebar = () => {
   );
 };
 
+// Configuration Panel Component
+interface NodeConfig {
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
+  database?: string;
+  queryTemplate?: string;
+  topK?: number;
+  testData?: string;
+  format?: string;
+  operation?: string;
+}
+
+const ConfigPanel = ({ selectedNode, onClose, onUpdateNode, onDeleteNode }: {
+  selectedNode: Node | null;
+  onClose: () => void;
+  onUpdateNode: (nodeId: string, data: any) => void;
+  onDeleteNode: (nodeId: string) => void;
+}) => {
+  const [nodeName, setNodeName] = useState(selectedNode?.data?.label || '');
+  const [config, setConfig] = useState<NodeConfig>(selectedNode?.data?.config || {});
+
+  useEffect(() => {
+    if (selectedNode) {
+      setNodeName(String(selectedNode.data?.label || ''));
+      setConfig(selectedNode.data?.config || getDefaultConfig(String(selectedNode.data?.type || '')));
+    }
+  }, [selectedNode]);
+
+  const getDefaultConfig = (nodeType: string): NodeConfig => {
+    switch (nodeType) {
+      case 'llm':
+        return { model: 'gpt-4o-mini', temperature: 0.7, maxTokens: 1000 };
+      case 'rag':
+        return { database: 'vector-db', queryTemplate: 'Search for: {query}', topK: 5 };
+      case 'input':
+        return { testData: 'Enter test input here...' };
+      case 'output':
+        return { format: 'text' };
+      case 'processor':
+        return { operation: 'transform' };
+      default:
+        return {};
+    }
+  };
+
+  const updateConfig = (key: string, value: any) => {
+    const newConfig = { ...config, [key]: value };
+    setConfig(newConfig);
+    if (selectedNode) {
+      onUpdateNode(selectedNode.id, {
+        ...selectedNode.data,
+        label: nodeName,
+        config: newConfig
+      });
+    }
+  };
+
+  const updateNodeName = (newName: string) => {
+    setNodeName(newName);
+    if (selectedNode) {
+      onUpdateNode(selectedNode.id, {
+        ...selectedNode.data,
+        label: newName,
+        config: config
+      });
+    }
+  };
+
+  if (!selectedNode) return null;
+
+  const renderConfigFields = () => {
+    switch (selectedNode.data?.type) {
+      case 'llm':
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="model">Model</Label>
+              <Select value={config.model || 'gpt-4o-mini'} onValueChange={(value) => updateConfig('model', value)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-white border z-50">
+                  <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
+                  <SelectItem value="gpt-4o">GPT-4o</SelectItem>
+                  <SelectItem value="claude-3-haiku">Claude 3 Haiku</SelectItem>
+                  <SelectItem value="claude-3-sonnet">Claude 3 Sonnet</SelectItem>
+                  <SelectItem value="claude-3-opus">Claude 3 Opus</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="temperature">Temperature: {config.temperature || 0.7}</Label>
+              <Slider
+                value={[config.temperature || 0.7]}
+                onValueChange={(value) => updateConfig('temperature', value[0])}
+                max={2}
+                min={0}
+                step={0.1}
+                className="mt-2"
+              />
+            </div>
+            <div>
+              <Label htmlFor="maxTokens">Max Tokens</Label>
+              <Input
+                type="number"
+                value={config.maxTokens || 1000}
+                onChange={(e) => updateConfig('maxTokens', parseInt(e.target.value))}
+                className="mt-1"
+              />
+            </div>
+          </div>
+        );
+      case 'rag':
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="database">Database</Label>
+              <Select value={config.database || 'vector-db'} onValueChange={(value) => updateConfig('database', value)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-white border z-50">
+                  <SelectItem value="vector-db">Vector Database</SelectItem>
+                  <SelectItem value="elasticsearch">Elasticsearch</SelectItem>
+                  <SelectItem value="pinecone">Pinecone</SelectItem>
+                  <SelectItem value="weaviate">Weaviate</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="queryTemplate">Search Query Template</Label>
+              <Textarea
+                value={config.queryTemplate || 'Search for: {query}'}
+                onChange={(e) => updateConfig('queryTemplate', e.target.value)}
+                className="mt-1"
+                rows={3}
+              />
+            </div>
+            <div>
+              <Label htmlFor="topK">Top-K Results</Label>
+              <Input
+                type="number"
+                value={config.topK || 5}
+                onChange={(e) => updateConfig('topK', parseInt(e.target.value))}
+                className="mt-1"
+                min={1}
+                max={50}
+              />
+            </div>
+          </div>
+        );
+      case 'input':
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="testData">Test Data</Label>
+              <Textarea
+                value={config.testData || 'Enter test input here...'}
+                onChange={(e) => updateConfig('testData', e.target.value)}
+                className="mt-1"
+                rows={6}
+                placeholder="Enter test input data..."
+              />
+            </div>
+          </div>
+        );
+      case 'output':
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="format">Output Format</Label>
+              <Select value={config.format || 'text'} onValueChange={(value) => updateConfig('format', value)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-white border z-50">
+                  <SelectItem value="text">Text</SelectItem>
+                  <SelectItem value="json">JSON</SelectItem>
+                  <SelectItem value="markdown">Markdown</SelectItem>
+                  <SelectItem value="html">HTML</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        );
+      case 'processor':
+        return (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="operation">Operation</Label>
+              <Select value={config.operation || 'transform'} onValueChange={(value) => updateConfig('operation', value)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-white border z-50">
+                  <SelectItem value="transform">Transform</SelectItem>
+                  <SelectItem value="filter">Filter</SelectItem>
+                  <SelectItem value="validate">Validate</SelectItem>
+                  <SelectItem value="extract">Extract</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        );
+      default:
+        return <div>No configuration available for this node type.</div>;
+    }
+  };
+
+  return (
+    <div className={`fixed top-0 right-0 h-full w-80 bg-white shadow-lg border-l border-gray-200 transform transition-transform duration-300 ease-in-out z-40 ${selectedNode ? 'translate-x-0' : 'translate-x-full'}`}>
+      <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+        <h3 className="text-lg font-semibold">Node Configuration</h3>
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+      
+      <div className="p-4 space-y-4 overflow-y-auto h-full pb-20">
+        <div>
+          <Label htmlFor="nodeType">Node Type</Label>
+          <Input value={String(selectedNode.data?.type || '')} disabled className="mt-1 bg-gray-50" />
+        </div>
+        
+        <div>
+          <Label htmlFor="nodeName">Node Name</Label>
+          <Input
+            value={String(nodeName)}
+            onChange={(e) => updateNodeName(e.target.value)}
+            className="mt-1"
+            placeholder="Enter node name..."
+          />
+        </div>
+        
+        {renderConfigFields()}
+      </div>
+      
+      <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 bg-white">
+        <Button
+          variant="destructive"
+          onClick={() => onDeleteNode(selectedNode.id)}
+          className="w-full"
+        >
+          <Trash2 className="h-4 w-4 mr-2" />
+          Delete Node
+        </Button>
+      </div>
+    </div>
+  );
+};
+
 export const FlowCanvas = () => {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [selectedNode, setSelectedNode] = useState<Node | null>(null);
 
   const nodeTypes: NodeTypes = useMemo(() => ({
     input: CustomNode,
@@ -167,8 +427,36 @@ export const FlowCanvas = () => {
     [setNodes]
   );
 
+  const onNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
+    setSelectedNode(node);
+  }, []);
+
+  const onPaneClick = useCallback(() => {
+    setSelectedNode(null);
+  }, []);
+
+  const handleUpdateNode = useCallback((nodeId: string, newData: any) => {
+    setNodes((nds) =>
+      nds.map((node) =>
+        node.id === nodeId
+          ? { ...node, data: newData }
+          : node
+      )
+    );
+  }, [setNodes]);
+
+  const handleDeleteNode = useCallback((nodeId: string) => {
+    setNodes((nds) => nds.filter((node) => node.id !== nodeId));
+    setEdges((eds) => eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
+    setSelectedNode(null);
+  }, [setNodes, setEdges]);
+
+  const handleClosePanel = useCallback(() => {
+    setSelectedNode(null);
+  }, []);
+
   return (
-    <div className="h-screen w-full flex">
+    <div className="h-screen w-full flex relative">
       <Sidebar />
       <div className="flex-1" ref={reactFlowWrapper}>
         <ReactFlow
@@ -179,6 +467,8 @@ export const FlowCanvas = () => {
           onConnect={onConnect}
           onDrop={onDrop}
           onDragOver={onDragOver}
+          onNodeClick={onNodeClick}
+          onPaneClick={onPaneClick}
           nodeTypes={nodeTypes}
           fitView
           className="bg-gray-50"
@@ -188,6 +478,12 @@ export const FlowCanvas = () => {
           <MiniMap className="bottom-4 left-4" />
         </ReactFlow>
       </div>
+      <ConfigPanel
+        selectedNode={selectedNode}
+        onClose={handleClosePanel}
+        onUpdateNode={handleUpdateNode}
+        onDeleteNode={handleDeleteNode}
+      />
     </div>
   );
 };
