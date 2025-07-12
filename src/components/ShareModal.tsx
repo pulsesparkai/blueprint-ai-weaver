@@ -33,6 +33,20 @@ interface ShareModalProps {
   userTier?: string;
 }
 
+// Supabase database types (snake_case)
+interface ShareLinkDB {
+  id: string;
+  blueprint_id: string;
+  created_by: string;
+  share_type: 'public' | 'private' | 'team';
+  access_level: 'view' | 'edit' | 'admin';
+  expires_at: string | null;
+  share_token: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Frontend types (camelCase)
 interface ShareLink {
   id: string;
   shareType: 'public' | 'private' | 'team';
@@ -42,12 +56,29 @@ interface ShareLink {
   createdAt: string;
 }
 
+// Type for new share form
+type ShareFormData = {
+  shareType: 'public' | 'private' | 'team';
+  accessLevel: 'view' | 'edit' | 'admin';
+  expiresAt: string;
+};
+
+// Transform database data to frontend format
+const transformShareLink = (dbLink: ShareLinkDB): ShareLink => ({
+  id: dbLink.id,
+  shareType: dbLink.share_type,
+  accessLevel: dbLink.access_level,
+  shareToken: dbLink.share_token,
+  expiresAt: dbLink.expires_at || undefined,
+  createdAt: dbLink.created_at,
+});
+
 export function ShareModal({ blueprintId, blueprintTitle, isOpen, onClose, userTier = 'free' }: ShareModalProps) {
   const [shareLinks, setShareLinks] = useState<ShareLink[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [newShare, setNewShare] = useState({
-    shareType: 'private' as const,
-    accessLevel: 'view' as const,
+  const [newShare, setNewShare] = useState<ShareFormData>({
+    shareType: 'private',
+    accessLevel: 'view',
     expiresAt: '',
   });
   const { toast } = useToast();
@@ -67,7 +98,10 @@ export function ShareModal({ blueprintId, blueprintTitle, isOpen, onClose, userT
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setShareLinks(data || []);
+      
+      // Transform database data to frontend format
+      const transformedData = (data as ShareLinkDB[] || []).map(transformShareLink);
+      setShareLinks(transformedData);
     } catch (error) {
       console.error('Error fetching share links:', error);
     }
@@ -110,7 +144,9 @@ export function ShareModal({ blueprintId, blueprintTitle, isOpen, onClose, userT
 
       if (error) throw error;
 
-      setShareLinks(prev => [data, ...prev]);
+      // Transform and add the new share link
+      const transformedData = transformShareLink(data as ShareLinkDB);
+      setShareLinks(prev => [transformedData, ...prev]);
       setNewShare({ shareType: 'private', accessLevel: 'view', expiresAt: '' });
       
       toast({
