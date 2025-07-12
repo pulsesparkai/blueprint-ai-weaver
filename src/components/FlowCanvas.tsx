@@ -13,34 +13,71 @@ import {
   NodeTypes,
   Handle,
   Position,
+  getBezierPath,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { X, Trash2 } from 'lucide-react';
+import { X, Trash2, Play, Clock, Zap, DollarSign, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { useToast } from '@/hooks/use-toast';
+import { pipelineExecutor, ExecutionStatus, formatExecutionTime } from '@/lib/pipeline-executor';
 
-// Node component for different types
+// Node component for different types with execution status
 const CustomNode = ({ data, id }: { data: any; id: string }) => {
-  const nodeColors = {
-    input: 'border-blue-500 bg-blue-50 text-blue-900',
-    llm: 'border-purple-500 bg-purple-50 text-purple-900', 
-    rag: 'border-green-500 bg-green-50 text-green-900',
-    processor: 'border-orange-500 bg-orange-50 text-orange-900',
-    output: 'border-red-500 bg-red-50 text-red-900'
+  const executionStatus = data.executionStatus || 'idle';
+  const executionTime = data.executionTime;
+  
+  const getNodeStatusColor = (status: string, nodeType: string) => {
+    const baseColors = {
+      input: 'border-blue-500',
+      llm: 'border-purple-500', 
+      rag: 'border-green-500',
+      processor: 'border-orange-500',
+      output: 'border-red-500'
+    };
+    
+    const baseColor = baseColors[nodeType as keyof typeof baseColors] || 'border-gray-500';
+    
+    switch (status) {
+      case 'pending':
+        return `${baseColor} bg-blue-100 text-blue-900 animate-pulse`;
+      case 'running':
+        return `${baseColor} bg-yellow-100 text-yellow-900 animate-pulse`;
+      case 'success':
+        return `${baseColor} bg-green-100 text-green-900`;
+      case 'error':
+        return `${baseColor} bg-red-100 text-red-900`;
+      default:
+        return `${baseColor} bg-gray-50 text-gray-900`;
+    }
   };
 
-  const colorClass = nodeColors[data.type as keyof typeof nodeColors] || 'border-gray-500 bg-gray-50 text-gray-900';
+  const colorClass = getNodeStatusColor(executionStatus, data.type);
 
   return (
-    <div className={`px-4 py-3 border-2 rounded-lg shadow-lg min-w-[120px] ${colorClass}`}>
+    <div className={`px-4 py-3 border-2 rounded-lg shadow-lg min-w-[120px] transition-all duration-300 ${colorClass}`}>
       {data.type !== 'input' && (
         <Handle type="target" position={Position.Left} className="w-3 h-3" />
       )}
       <div className="font-medium text-center">{data.label}</div>
+      {executionTime && (
+        <div className="text-xs text-center mt-1 opacity-75">
+          {formatExecutionTime(executionTime)}
+        </div>
+      )}
+      {data.tokensUsed && (
+        <div className="text-xs text-center mt-1 opacity-75">
+          <Zap className="h-3 w-3 inline mr-1" />
+          {data.tokensUsed} tokens
+        </div>
+      )}
       {data.type !== 'output' && (
         <Handle type="source" position={Position.Right} className="w-3 h-3" />
       )}
@@ -345,11 +382,175 @@ const ConfigPanel = ({ selectedNode, onClose, onUpdateNode, onDeleteNode }: {
   );
 };
 
+// Animated Edge Component
+const AnimatedEdge = ({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style = {}, markerEnd, data }: any) => {
+  const [edgePath] = getBezierPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+  });
+
+  const isAnimating = data?.isAnimating || false;
+
+  return (
+    <>
+      <path
+        id={id}
+        style={style}
+        className="react-flow__edge-path"
+        d={edgePath}
+        markerEnd={markerEnd}
+      />
+      {isAnimating && (
+        <circle
+          r="3"
+          fill="#10b981"
+          className="animate-pulse"
+        >
+          <animateMotion
+            dur="2s"
+            repeatCount="indefinite"
+            path={edgePath}
+          />
+        </circle>
+      )}
+    </>
+  );
+};
+
+// Execution Metrics Panel
+const ExecutionMetrics = ({ metrics, isVisible, onToggle }: {
+  metrics: {
+    totalTime: number;
+    totalTokens: number;
+    estimatedCost: number;
+    nodeMetrics: Record<string, any>;
+  };
+  isVisible: boolean;
+  onToggle: () => void;
+}) => {
+  if (!isVisible) {
+    return (
+      <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-30">
+        <Button onClick={onToggle} variant="outline" size="sm">
+          <Eye className="h-4 w-4 mr-2" />
+          Show Metrics
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-30 w-96">
+      <Card className="bg-white/95 backdrop-blur-sm border shadow-lg">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg flex items-center">
+              <Clock className="h-5 w-5 mr-2" />
+              Execution Metrics
+            </CardTitle>
+            <Button onClick={onToggle} variant="ghost" size="sm">
+              <EyeOff className="h-4 w-4" />
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-600">
+                {formatExecutionTime(metrics.totalTime)}
+              </div>
+              <div className="text-sm text-gray-600">Total Time</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-green-600">
+                {metrics.totalTokens.toLocaleString()}
+              </div>
+              <div className="text-sm text-gray-600">Tokens Used</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-purple-600">
+                ${metrics.estimatedCost.toFixed(4)}
+              </div>
+              <div className="text-sm text-gray-600">Est. Cost</div>
+            </div>
+          </div>
+          
+          {Object.keys(metrics.nodeMetrics).length > 0 && (
+            <>
+              <Separator />
+              <div className="space-y-2">
+                <h4 className="font-medium text-sm">Node Breakdown</h4>
+                {Object.entries(metrics.nodeMetrics).map(([nodeId, data]: [string, any]) => (
+                  <div key={nodeId} className="flex justify-between items-center text-sm">
+                    <span className="truncate">{data.label}</span>
+                    <div className="flex space-x-3 text-xs">
+                      <span>{formatExecutionTime(data.time)}</span>
+                      {data.tokens && (
+                        <span className="text-green-600">
+                          <Zap className="h-3 w-3 inline mr-1" />
+                          {data.tokens}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+// Top Toolbar Component
+const TopToolbar = ({ onRunPipeline, isExecuting, nodes }: {
+  onRunPipeline: () => void;
+  isExecuting: boolean;
+  nodes: Node[];
+}) => {
+  return (
+    <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-30">
+      <Card className="bg-white/95 backdrop-blur-sm border shadow-lg">
+        <CardContent className="p-3">
+          <div className="flex items-center space-x-4">
+            <Button
+              onClick={onRunPipeline}
+              disabled={isExecuting || nodes.length === 0}
+              className="flex items-center space-x-2"
+            >
+              <Play className="h-4 w-4" />
+              <span>{isExecuting ? 'Running...' : 'Run Pipeline'}</span>
+            </Button>
+            
+            <div className="flex items-center space-x-2 text-sm text-gray-600">
+              <span>{nodes.length} nodes</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
 export const FlowCanvas = () => {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [showMetrics, setShowMetrics] = useState(false);
+  const [executionMetrics, setExecutionMetrics] = useState({
+    totalTime: 0,
+    totalTokens: 0,
+    estimatedCost: 0,
+    nodeMetrics: {} as Record<string, any>
+  });
+  const { toast } = useToast();
 
   const nodeTypes: NodeTypes = useMemo(() => ({
     input: CustomNode,
@@ -455,10 +656,159 @@ export const FlowCanvas = () => {
     setSelectedNode(null);
   }, []);
 
+  // Calculate token costs (simplified pricing)
+  const calculateCost = (tokens: number, model: string) => {
+    const pricing: Record<string, { input: number; output: number }> = {
+      'gpt-4o-mini': { input: 0.00015, output: 0.0006 },
+      'gpt-4o': { input: 0.005, output: 0.015 },
+      'claude-3-haiku': { input: 0.00025, output: 0.00125 },
+      'claude-3-sonnet': { input: 0.003, output: 0.015 },
+      'claude-3-opus': { input: 0.015, output: 0.075 }
+    };
+    
+    const modelPricing = pricing[model] || pricing['gpt-4o-mini'];
+    return (tokens / 1000) * modelPricing.input; // Simplified calculation
+  };
+
+  // Run pipeline execution
+  const runPipeline = useCallback(async () => {
+    if (nodes.length === 0) {
+      toast({
+        title: "No Pipeline",
+        description: "Add some nodes to your pipeline before running",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsExecuting(true);
+    setShowMetrics(true);
+
+    // Reset execution status
+    setNodes((nds) => nds.map(node => ({
+      ...node,
+      data: {
+        ...node.data,
+        executionStatus: 'pending',
+        executionTime: undefined,
+        tokensUsed: undefined
+      }
+    })));
+
+    // Animate edges during execution
+    setEdges((eds) => eds.map(edge => ({
+      ...edge,
+      data: { ...edge.data, isAnimating: true }
+    })));
+
+    let totalTokens = 0;
+    let totalCost = 0;
+    const nodeMetrics: Record<string, any> = {};
+
+    try {
+      const startTime = Date.now();
+
+      // Execute pipeline
+      const results = await pipelineExecutor.executePipeline(nodes, edges, (statuses) => {
+        // Update node statuses in real-time
+        setNodes((nds) => nds.map(node => {
+          const status = statuses.get(node.id);
+          if (status) {
+            const tokensUsed = status.data?.tokensUsed || status.data?.tokens_used;
+            if (tokensUsed) {
+              totalTokens += tokensUsed;
+              const model = status.data?.model || 'gpt-4o-mini';
+              totalCost += calculateCost(tokensUsed, model);
+            }
+
+            nodeMetrics[node.id] = {
+              label: node.data.label,
+              time: status.executionTime || 0,
+              tokens: tokensUsed,
+              status: status.status
+            };
+
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                executionStatus: status.status,
+                executionTime: status.executionTime,
+                tokensUsed: tokensUsed
+              }
+            };
+          }
+          return node;
+        }));
+
+        // Update metrics
+        setExecutionMetrics({
+          totalTime: Date.now() - startTime,
+          totalTokens,
+          estimatedCost: totalCost,
+          nodeMetrics
+        });
+      });
+
+      const totalTime = Date.now() - startTime;
+      
+      setExecutionMetrics({
+        totalTime,
+        totalTokens,
+        estimatedCost: totalCost,
+        nodeMetrics
+      });
+
+      toast({
+        title: "Pipeline Complete",
+        description: `Executed successfully in ${formatExecutionTime(totalTime)}`
+      });
+
+    } catch (error) {
+      console.error('Pipeline execution failed:', error);
+      toast({
+        title: "Execution Failed",
+        description: error instanceof Error ? error.message : "Unknown error occurred",
+        variant: "destructive"
+      });
+
+      // Mark failed nodes
+      setNodes((nds) => nds.map(node => ({
+        ...node,
+        data: {
+          ...node.data,
+          executionStatus: node.data.executionStatus === 'running' ? 'error' : node.data.executionStatus
+        }
+      })));
+    } finally {
+      setIsExecuting(false);
+
+      // Stop edge animations
+      setTimeout(() => {
+        setEdges((eds) => eds.map(edge => ({
+          ...edge,
+          data: { ...edge.data, isAnimating: false }
+        })));
+      }, 2000);
+    }
+  }, [nodes, edges, toast, setNodes, setEdges]);
+
+  // Edge types with animation support
+  const edgeTypes = useMemo(() => ({
+    default: AnimatedEdge,
+    animated: AnimatedEdge
+  }), []);
+
   return (
     <div className="h-screen w-full flex relative">
       <Sidebar />
       <div className="flex-1" ref={reactFlowWrapper}>
+        <TopToolbar 
+          onRunPipeline={runPipeline}
+          isExecuting={isExecuting}
+          nodes={nodes}
+        />
+        
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -470,6 +820,7 @@ export const FlowCanvas = () => {
           onNodeClick={onNodeClick}
           onPaneClick={onPaneClick}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
           fitView
           className="bg-gray-50"
         >
@@ -477,7 +828,14 @@ export const FlowCanvas = () => {
           <Controls className="bottom-4 right-4" />
           <MiniMap className="bottom-4 left-4" />
         </ReactFlow>
+        
+        <ExecutionMetrics
+          metrics={executionMetrics}
+          isVisible={showMetrics}
+          onToggle={() => setShowMetrics(!showMetrics)}
+        />
       </div>
+      
       <ConfigPanel
         selectedNode={selectedNode}
         onClose={handleClosePanel}
