@@ -137,6 +137,53 @@ export type Database = {
           },
         ]
       }
+      export_logs: {
+        Row: {
+          blueprint_id: string
+          created_at: string
+          download_url: string | null
+          export_config: Json
+          export_format: string
+          file_path: string
+          file_size: number | null
+          filename: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          blueprint_id: string
+          created_at?: string
+          download_url?: string | null
+          export_config?: Json
+          export_format: string
+          file_path: string
+          file_size?: number | null
+          filename: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          blueprint_id?: string
+          created_at?: string
+          download_url?: string | null
+          export_config?: Json
+          export_format?: string
+          file_path?: string
+          file_size?: number | null
+          filename?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "export_logs_blueprint_id_fkey"
+            columns: ["blueprint_id"]
+            isOneToOne: false
+            referencedRelation: "blueprints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       optimization_history: {
         Row: {
           after_metrics: Json
