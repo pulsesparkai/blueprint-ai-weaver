@@ -6,7 +6,7 @@ import { SimulatorPane } from './SimulatorPane';
 import { Button } from '@/components/ui/button';
 import { Menu, Sparkles, User, Crown } from 'lucide-react';
 
-export function ContextEngineApp() {
+export function ContextEngineApp({ blueprint }: { blueprint?: any }) {
   const [simulatorCollapsed, setSimulatorCollapsed] = useState(false);
   const [addNodeHandler, setAddNodeHandler] = useState<((nodeType: any) => void) | null>(null);
 
