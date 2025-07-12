@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Supabase local development (optional)
+  supabase:
+    image: supabase/supabase:latest
+    ports:
+      - "8000:8000"
+      - "5432:5432"
+    environment:
+      - POSTGRES_PASSWORD=postgres
+      - JWT_SECRET=your-jwt-secret
+      - ANON_KEY=your-anon-key
+      - SERVICE_ROLE_KEY=your-service-role-key
+    volumes:
+      - supabase_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  supabase_data:
