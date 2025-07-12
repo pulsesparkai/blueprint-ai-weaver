@@ -322,6 +322,13 @@ export default function Dashboard() {
                   <Database className="w-4 h-4" />
                   Integrations
                 </Link>
+                <Link 
+                  to="/test-integrations" 
+                  className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
+                >
+                  <Zap className="w-4 h-4" />
+                  Test APIs
+                </Link>
               </nav>
             </div>
 

@@ -85,6 +85,41 @@ serve(async (req) => {
 
     let results = [];
 
+    // Generate embeddings for the query
+    const openaiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openaiKey && integration.type !== 'weaviate') {
+      throw new Error('OpenAI API key required for embeddings generation');
+    }
+
+    let queryVector = [];
+    
+    // Generate embeddings using OpenAI (needed for Pinecone and Qdrant)
+    if (integration.type === 'pinecone' || integration.type === 'qdrant') {
+      const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openaiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'text-embedding-3-small',
+          input: query,
+        }),
+      });
+
+      if (!embeddingResponse.ok) {
+        const errorText = await embeddingResponse.text();
+        throw new Error(`OpenAI Embeddings API error: ${embeddingResponse.status} - ${errorText}`);
+      }
+
+      const embeddingData = await embeddingResponse.json();
+      queryVector = embeddingData.data[0]?.embedding || [];
+      
+      if (queryVector.length === 0) {
+        throw new Error('Failed to generate embeddings for query');
+      }
+    }
+
     // Handle different vector database providers
     if (integration.type === 'pinecone') {
       const environment = config.environment || 'us-east-1-aws';
@@ -97,7 +132,7 @@ serve(async (req) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          vector: Array(1536).fill(0), // Mock vector - in real app, you'd embed the query
+          vector: queryVector,
           topK: top_k,
           includeMetadata: true,
         }),
@@ -168,7 +203,7 @@ serve(async (req) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          vector: Array(1536).fill(0), // Mock vector - in real app, you'd embed the query
+          vector: queryVector,
           limit: top_k,
           with_payload: true,
         }),
