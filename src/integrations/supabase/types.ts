@@ -137,6 +137,112 @@ export type Database = {
           },
         ]
       }
+      optimization_history: {
+        Row: {
+          after_metrics: Json
+          before_metrics: Json
+          blueprint_id: string
+          created_at: string
+          error_message: string | null
+          execution_time_ms: number | null
+          id: string
+          improvements: Json
+          optimization_type: string
+          strategies_applied: Json
+          success: boolean | null
+          user_id: string
+        }
+        Insert: {
+          after_metrics?: Json
+          before_metrics?: Json
+          blueprint_id: string
+          created_at?: string
+          error_message?: string | null
+          execution_time_ms?: number | null
+          id?: string
+          improvements?: Json
+          optimization_type: string
+          strategies_applied?: Json
+          success?: boolean | null
+          user_id: string
+        }
+        Update: {
+          after_metrics?: Json
+          before_metrics?: Json
+          blueprint_id?: string
+          created_at?: string
+          error_message?: string | null
+          execution_time_ms?: number | null
+          id?: string
+          improvements?: Json
+          optimization_type?: string
+          strategies_applied?: Json
+          success?: boolean | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "optimization_history_blueprint_id_fkey"
+            columns: ["blueprint_id"]
+            isOneToOne: false
+            referencedRelation: "blueprints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      optimized_blueprints: {
+        Row: {
+          applied_at: string | null
+          created_at: string
+          id: string
+          optimization_metrics: Json
+          optimization_strategies: Json
+          optimization_type: string | null
+          optimized_edges: Json
+          optimized_nodes: Json
+          original_blueprint_id: string
+          performance_improvement_percent: number | null
+          token_savings_percent: number | null
+          user_id: string
+        }
+        Insert: {
+          applied_at?: string | null
+          created_at?: string
+          id?: string
+          optimization_metrics?: Json
+          optimization_strategies?: Json
+          optimization_type?: string | null
+          optimized_edges?: Json
+          optimized_nodes?: Json
+          original_blueprint_id: string
+          performance_improvement_percent?: number | null
+          token_savings_percent?: number | null
+          user_id: string
+        }
+        Update: {
+          applied_at?: string | null
+          created_at?: string
+          id?: string
+          optimization_metrics?: Json
+          optimization_strategies?: Json
+          optimization_type?: string | null
+          optimized_edges?: Json
+          optimized_nodes?: Json
+          original_blueprint_id?: string
+          performance_improvement_percent?: number | null
+          token_savings_percent?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "optimized_blueprints_original_blueprint_id_fkey"
+            columns: ["original_blueprint_id"]
+            isOneToOne: false
+            referencedRelation: "blueprints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -284,6 +390,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_optimization: {
+        Args: { optimization_id: string }
+        Returns: boolean
+      }
       cleanup_expired_sessions: {
         Args: Record<PropertyKey, never>
         Returns: number
