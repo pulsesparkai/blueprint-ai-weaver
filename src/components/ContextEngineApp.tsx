@@ -6,9 +6,10 @@ import { SimulatorPane } from './SimulatorPane';
 import { GraphProvider } from '@/contexts/GraphContext';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Menu, Sparkles, User, Crown, Zap, TrendingUp, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { Menu, Sparkles, User, Crown, Zap, TrendingUp, Loader2, CheckCircle, AlertCircle, Download, FileCode, Container } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -19,6 +20,7 @@ export function ContextEngineApp({ blueprint }: { blueprint?: any }) {
   const [optimizationOpen, setOptimizationOpen] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
   const [optimizationResults, setOptimizationResults] = useState<any>(null);
+  const [exporting, setExporting] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -116,6 +118,54 @@ export function ContextEngineApp({ blueprint }: { blueprint?: any }) {
     }
   };
 
+  const handleExport = async (format: 'python' | 'docker') => {
+    if (!blueprint?.id) {
+      toast({
+        title: "No Blueprint",
+        description: "Please load a blueprint first",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setExporting(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('blueprint-exporter', {
+        body: {
+          blueprintId: blueprint.id,
+          format,
+          includeConfig: true,
+          includeRequirements: true
+        }
+      });
+
+      if (error) throw error;
+
+      // Download the generated file
+      const link = document.createElement('a');
+      link.href = data.downloadUrl;
+      link.download = data.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast({
+        title: "Export Complete",
+        description: `Blueprint exported as ${format.toUpperCase()}`,
+      });
+    } catch (error: any) {
+      console.error('Export error:', error);
+      toast({
+        title: "Export Failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleAddNode = (nodeType: any) => {
     if (addNodeHandler) {
       addNodeHandler(nodeType);
@@ -141,6 +191,34 @@ export function ContextEngineApp({ blueprint }: { blueprint?: any }) {
             </div>
 
             <div className="flex items-center gap-3">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    disabled={!blueprint?.id || exporting}
+                    className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 border-blue-200 dark:border-blue-800 hover:from-blue-100 hover:to-purple-100 dark:hover:from-blue-900/30 dark:hover:to-purple-900/30"
+                  >
+                    {exporting ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Download className="w-4 h-4 mr-2" />
+                    )}
+                    Export
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleExport('python')}>
+                    <FileCode className="w-4 h-4 mr-2" />
+                    Python Script
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport('docker')}>
+                    <Container className="w-4 h-4 mr-2" />
+                    Docker Setup
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
               <Button 
                 variant="outline" 
                 size="sm"
