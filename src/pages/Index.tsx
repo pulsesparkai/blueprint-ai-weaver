@@ -39,7 +39,6 @@ const Index = () => {
       features: [
         "Up to 5 blueprints",
         "Basic node types",
-        "Community support",
         "Export to Python"
       ],
       cta: "Get Started Free",
@@ -52,7 +51,6 @@ const Index = () => {
       features: [
         "Unlimited blueprints",
         "Advanced node types",
-        "Priority support",
         "Export to Docker",
         "Collaboration features",
         "Version control"
@@ -69,8 +67,7 @@ const Index = () => {
         "Team management",
         "Custom nodes",
         "On-premise deployment",
-        "SLA guarantee",
-        "Dedicated support"
+        "SLA guarantee"
       ],
       cta: "Contact Sales",
       popular: false
