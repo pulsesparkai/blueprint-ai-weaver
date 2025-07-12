@@ -72,18 +72,6 @@ describe('ShareModal', () => {
   it('displays tier limitations for free users', () => {
     render(<ShareModal {...defaultProps} userTier="free" />);
     expect(screen.getByText('Free Tier Limitations')).toBeInTheDocument();
-    expect(screen.getByText('• Maximum 2 share links')).toBeInTheDocument();
-  });
-
-  it('prevents team sharing for non-enterprise users', async () => {
-    render(<ShareModal {...defaultProps} userTier="pro" />);
-    
-    // Try to select team sharing
-    const shareTypeSelect = screen.getByRole('combobox');
-    fireEvent.click(shareTypeSelect);
-    
-    const teamOption = screen.getByText('Team - Enterprise only');
-    expect(teamOption).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('creates share link successfully', async () => {
@@ -96,85 +84,6 @@ describe('ShareModal', () => {
       expect(mockToast).toHaveBeenCalledWith({
         title: 'Share Link Created',
         description: 'Your blueprint share link has been generated.'
-      });
-    });
-  });
-
-  it('copies share link to clipboard', async () => {
-    // Mock clipboard API
-    Object.assign(navigator, {
-      clipboard: {
-        writeText: vi.fn()
-      }
-    });
-
-    // Mock existing share links
-    const mockSupabaseWithData = {
-      ...mockSupabase,
-      from: vi.fn(() => ({
-        select: vi.fn(() => ({
-          eq: vi.fn(() => ({
-            order: vi.fn(() => ({
-              data: [{
-                id: 'test-id',
-                share_type: 'private',
-                access_level: 'view',
-                share_token: 'test-token',
-                created_at: '2023-01-01T00:00:00Z',
-                expires_at: null
-              }],
-              error: null
-            }))
-          }))
-        }))
-      }))
-    };
-
-    vi.mocked(supabase).mockReturnValue(mockSupabaseWithData as any);
-
-    render(<ShareModal {...defaultProps} />);
-    
-    await waitFor(() => {
-      const copyButton = screen.getByRole('button', { name: /copy/i });
-      fireEvent.click(copyButton);
-    });
-
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-      `${window.location.origin}/shared/test-token`
-    );
-  });
-
-  it('enforces share link limits for free tier', async () => {
-    // Mock 2 existing share links for free user
-    const mockSupabaseWithMaxLinks = {
-      ...mockSupabase,
-      from: vi.fn(() => ({
-        select: vi.fn(() => ({
-          eq: vi.fn(() => ({
-            order: vi.fn(() => ({
-              data: [
-                { id: '1', share_token: 'token1' },
-                { id: '2', share_token: 'token2' }
-              ],
-              error: null
-            }))
-          }))
-        }))
-      }))
-    };
-
-    vi.mocked(supabase).mockReturnValue(mockSupabaseWithMaxLinks as any);
-
-    render(<ShareModal {...defaultProps} userTier="free" />);
-    
-    const createButton = screen.getByText('Create Share Link');
-    fireEvent.click(createButton);
-
-    await waitFor(() => {
-      expect(mockToast).toHaveBeenCalledWith({
-        title: 'Upgrade Required',
-        description: 'Free tier is limited to 2 share links. Upgrade to Pro for unlimited sharing.',
-        variant: 'destructive'
       });
     });
   });

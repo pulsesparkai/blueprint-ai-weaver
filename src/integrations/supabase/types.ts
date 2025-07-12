@@ -234,6 +234,39 @@ export type Database = {
           },
         ]
       }
+      encrypted_credentials: {
+        Row: {
+          created_at: string
+          encrypted_data: string
+          expires_at: string | null
+          id: string
+          key_hash: string
+          service_name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          encrypted_data: string
+          expires_at?: string | null
+          id?: string
+          key_hash: string
+          service_name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          encrypted_data?: string
+          expires_at?: string | null
+          id?: string
+          key_hash?: string
+          service_name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       execution_logs: {
         Row: {
           blueprint_id: string
@@ -634,6 +667,78 @@ export type Database = {
         }
         Relationships: []
       }
+      rate_limits: {
+        Row: {
+          blocked_until: string | null
+          created_at: string
+          endpoint: string
+          id: string
+          ip_address: unknown | null
+          request_count: number
+          updated_at: string
+          user_id: string | null
+          window_end: string
+          window_start: string
+        }
+        Insert: {
+          blocked_until?: string | null
+          created_at?: string
+          endpoint: string
+          id?: string
+          ip_address?: unknown | null
+          request_count?: number
+          updated_at?: string
+          user_id?: string | null
+          window_end?: string
+          window_start?: string
+        }
+        Update: {
+          blocked_until?: string | null
+          created_at?: string
+          endpoint?: string
+          id?: string
+          ip_address?: unknown | null
+          request_count?: number
+          updated_at?: string
+          user_id?: string | null
+          window_end?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
+      security_logs: {
+        Row: {
+          created_at: string
+          details: Json | null
+          endpoint: string
+          event_type: string
+          id: string
+          ip_address: unknown | null
+          severity: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          details?: Json | null
+          endpoint: string
+          event_type: string
+          id?: string
+          ip_address?: unknown | null
+          severity?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          details?: Json | null
+          endpoint?: string
+          event_type?: string
+          id?: string
+          ip_address?: unknown | null
+          severity?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       simulation_logs: {
         Row: {
           blueprint_id: string
@@ -826,6 +931,16 @@ export type Database = {
         Args: { optimization_id: string }
         Returns: boolean
       }
+      check_rate_limit: {
+        Args: {
+          p_user_id: string
+          p_ip_address: unknown
+          p_endpoint: string
+          p_max_requests?: number
+          p_window_minutes?: number
+        }
+        Returns: boolean
+      }
       cleanup_expired_credentials: {
         Args: Record<PropertyKey, never>
         Returns: number
@@ -838,9 +953,38 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: number
       }
+      cleanup_rate_limits: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      cleanup_security_logs: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
       complete_simulation: {
         Args: { sim_id: string; final_result?: string; error_msg?: string }
         Returns: undefined
+      }
+      decrypt_api_key: {
+        Args: {
+          p_user_id: string
+          p_service_name: string
+          p_passphrase: string
+        }
+        Returns: string
+      }
+      encrypt_api_key: {
+        Args: {
+          p_user_id: string
+          p_service_name: string
+          p_api_key: string
+          p_passphrase: string
+        }
+        Returns: string
+      }
+      sanitize_input: {
+        Args: { p_input: string; p_max_length?: number; p_allow_html?: boolean }
+        Returns: string
       }
       test_integration: {
         Args: { integration_id: string }
