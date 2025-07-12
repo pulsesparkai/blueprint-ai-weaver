@@ -217,10 +217,15 @@ export default function Dashboard() {
         {/* Blueprints Section */}
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-xl font-semibold text-foreground">Your Blueprints</h3>
-          <Button onClick={createBlueprint} disabled={!isPaidUser && blueprints.length >= freeLimit}>
-            <Plus className="w-4 h-4 mr-2" />
-            Create Blueprint
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => navigate('/templates')}>
+              Templates
+            </Button>
+            <Button onClick={createBlueprint} disabled={!isPaidUser && blueprints.length >= freeLimit}>
+              <Plus className="w-4 h-4 mr-2" />
+              Create Blueprint
+            </Button>
+          </div>
         </div>
 
         {/* Blueprint Grid */}

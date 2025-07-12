@@ -9,6 +9,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Editor from "./pages/Editor";
+import Templates from "./pages/Templates";
 import Integrations from "./pages/Integrations";
 import ApiKeys from "./pages/ApiKeys";
 import NotFound from "./pages/NotFound";
@@ -28,6 +29,7 @@ const App = () => (
               <Route path="/auth" element={<Auth />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/editor/:id?" element={<Editor />} />
+              <Route path="/templates" element={<Templates />} />
               <Route path="/integrations" element={<Integrations />} />
               <Route path="/api-keys" element={<ApiKeys />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
