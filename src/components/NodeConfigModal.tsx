@@ -1,36 +1,97 @@
-import React, { useState } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
+import React, { useState, useEffect } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AlertCircle, Plus, X, Settings, CheckCircle, ExternalLink, RefreshCw } from 'lucide-react';
 import { useGraph } from '@/contexts/GraphContext';
-import { X, Plus } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 export function NodeConfigModal() {
   const { state, dispatch } = useGraph();
+  const { toast } = useToast();
+  const { user } = useAuth();
   const { selectedNode, configPanelOpen } = state;
   const [localData, setLocalData] = useState<any>({});
+  const [integrations, setIntegrations] = useState<any[]>([]);
+  const [loadingIntegrations, setLoadingIntegrations] = useState(false);
+  const [testingIntegration, setTestingIntegration] = useState<string | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (selectedNode) {
-      setLocalData(selectedNode.data);
+      setLocalData(selectedNode.data || {});
+      if (selectedNode.type === 'rag-retriever') {
+        loadIntegrations();
+      }
     }
   }, [selectedNode]);
+
+  const loadIntegrations = async () => {
+    if (!user) return;
+    
+    setLoadingIntegrations(true);
+    try {
+      const { data, error } = await supabase
+        .from('integrations')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setIntegrations(data || []);
+    } catch (error: any) {
+      console.error('Error loading integrations:', error);
+      toast({
+        title: "Failed to load integrations",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setLoadingIntegrations(false);
+    }
+  };
+
+  const testIntegration = async (integrationId: string) => {
+    setTestingIntegration(integrationId);
+    try {
+      const { data, error } = await supabase.functions.invoke('integration-manager', {
+        body: {
+          action: 'test',
+          integrationId
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        toast({
+          title: "Integration Test Successful",
+          description: "Connection verified successfully"
+        });
+        await loadIntegrations(); // Refresh to get updated status
+      } else {
+        toast({
+          title: "Integration Test Failed", 
+          description: data.error,
+          variant: "destructive"
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Test Failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setTestingIntegration(null);
+    }
+  };
 
   const handleSave = () => {
     if (selectedNode) {
@@ -71,70 +132,161 @@ export function NodeConfigModal() {
 
   if (!selectedNode || !configPanelOpen) return null;
 
-  const renderRAGRetrieverConfig = () => (
-    <div className="space-y-4">
-      <div>
-        <Label htmlFor="vectorDB">Vector Database</Label>
-        <Select value={localData.vectorDB || 'pinecone'} onValueChange={(value) => updateData('vectorDB', value)}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="pinecone">Pinecone</SelectItem>
-            <SelectItem value="faiss">FAISS</SelectItem>
-            <SelectItem value="weaviate">Weaviate</SelectItem>
-            <SelectItem value="chroma">Chroma</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      
-      <div>
-        <Label htmlFor="apiEndpoint">API Endpoint / Connection String</Label>
-        <Input
-          id="apiEndpoint"
-          value={localData.apiEndpoint || ''}
-          onChange={(e) => updateData('apiEndpoint', e.target.value)}
-          placeholder="https://your-index-12345.pinecone.io"
-        />
-      </div>
-      
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="topK">Top K Results</Label>
-          <Input
-            id="topK"
-            type="number"
-            value={localData.topK || 5}
-            onChange={(e) => updateData('topK', parseInt(e.target.value))}
-            min="1"
-            max="20"
-          />
-        </div>
-        <div>
-          <Label htmlFor="similarityThreshold">Similarity Threshold</Label>
-          <Input
-            id="similarityThreshold"
-            type="number"
-            step="0.1"
-            value={localData.similarityThreshold || 0.7}
-            onChange={(e) => updateData('similarityThreshold', parseFloat(e.target.value))}
-            min="0"
-            max="1"
-          />
-        </div>
-      </div>
-      
-      <div>
-        <Label htmlFor="namespace">Namespace (optional)</Label>
-        <Input
-          id="namespace"
-          value={localData.namespace || ''}
-          onChange={(e) => updateData('namespace', e.target.value)}
-          placeholder="production"
-        />
-      </div>
-    </div>
-  );
+  const renderRAGRetrieverConfig = () => {
+    const selectedIntegration = integrations.find(i => i.id === localData.integrationId);
+    
+    return (
+      <Tabs defaultValue="connection" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="connection">Connection</TabsTrigger>
+          <TabsTrigger value="settings">Settings</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="connection" className="space-y-4">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <Label>Vector Database Integration</Label>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={loadIntegrations}
+                disabled={loadingIntegrations}
+              >
+                <RefreshCw className={`w-4 h-4 mr-1 ${loadingIntegrations ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+            </div>
+            
+            {integrations.length > 0 ? (
+              <Select 
+                value={localData.integrationId || ''} 
+                onValueChange={(value) => updateData('integrationId', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select an integration" />
+                </SelectTrigger>
+                <SelectContent>
+                  {integrations.map((integration) => (
+                    <SelectItem key={integration.id} value={integration.id}>
+                      <div className="flex items-center gap-2">
+                        <span>{integration.name}</span>
+                        <Badge variant={integration.status === 'active' ? 'default' : 'destructive'} className="text-xs">
+                          {integration.type}
+                        </Badge>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="text-center p-4 border border-dashed rounded-lg">
+                <p className="text-sm text-muted-foreground mb-2">No integrations configured</p>
+                <Button size="sm" variant="outline" onClick={() => window.open('/integrations', '_blank')}>
+                  <ExternalLink className="w-4 h-4 mr-1" />
+                  Manage Integrations
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {selectedIntegration && (
+            <div className="p-3 bg-muted/30 rounded-lg border">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{selectedIntegration.name}</span>
+                  <Badge variant={selectedIntegration.status === 'active' ? 'default' : 'destructive'}>
+                    {selectedIntegration.status}
+                  </Badge>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => testIntegration(selectedIntegration.id)}
+                  disabled={testingIntegration === selectedIntegration.id}
+                >
+                  {testingIntegration === selectedIntegration.id ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <CheckCircle className="w-4 h-4" />
+                  )}
+                </Button>
+              </div>
+              
+              <div className="text-xs text-muted-foreground space-y-1">
+                <div>Type: {selectedIntegration.type}</div>
+                <div>Environment: {selectedIntegration.config.environment || 'default'}</div>
+                {selectedIntegration.last_validated && (
+                  <div>Last tested: {new Date(selectedIntegration.last_validated).toLocaleString()}</div>
+                )}
+                {selectedIntegration.validation_error && (
+                  <div className="text-destructive">Error: {selectedIntegration.validation_error}</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!selectedIntegration && localData.integrationId && (
+            <div className="p-3 bg-destructive/10 text-destructive rounded-lg border border-destructive/20">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" />
+                <span className="text-sm">Selected integration not found</span>
+              </div>
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="settings" className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="topK">Top K Results</Label>
+              <Input
+                id="topK"
+                type="number"
+                value={localData.topK || 5}
+                onChange={(e) => updateData('topK', parseInt(e.target.value))}
+                min="1"
+                max="20"
+              />
+            </div>
+            <div>
+              <Label htmlFor="similarityThreshold">Similarity Threshold</Label>
+              <Input
+                id="similarityThreshold"
+                type="number"
+                step="0.1"
+                value={localData.similarityThreshold || 0.7}
+                onChange={(e) => updateData('similarityThreshold', parseFloat(e.target.value))}
+                min="0"
+                max="1"
+              />
+            </div>
+          </div>
+          
+          <div>
+            <Label htmlFor="namespace">Namespace (optional)</Label>
+            <Input
+              id="namespace"
+              value={localData.namespace || ''}
+              onChange={(e) => updateData('namespace', e.target.value)}
+              placeholder="production"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="filter">Metadata Filter (JSON)</Label>
+            <Textarea
+              id="filter"
+              value={localData.filter || ''}
+              onChange={(e) => updateData('filter', e.target.value)}
+              placeholder='{"category": "documentation", "version": "latest"}'
+              rows={3}
+              className="font-mono text-sm"
+            />
+          </div>
+        </TabsContent>
+      </Tabs>
+    );
+  };
 
   const renderMemoryStoreConfig = () => (
     <div className="space-y-4">

@@ -184,6 +184,102 @@ export type Database = {
           },
         ]
       }
+      integration_usage_logs: {
+        Row: {
+          blueprint_id: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          integration_id: string
+          operation_type: string
+          request_count: number | null
+          response_time_ms: number | null
+          success: boolean | null
+          user_id: string
+        }
+        Insert: {
+          blueprint_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          integration_id: string
+          operation_type: string
+          request_count?: number | null
+          response_time_ms?: number | null
+          success?: boolean | null
+          user_id: string
+        }
+        Update: {
+          blueprint_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          integration_id?: string
+          operation_type?: string
+          request_count?: number | null
+          response_time_ms?: number | null
+          success?: boolean | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_usage_logs_blueprint_id_fkey"
+            columns: ["blueprint_id"]
+            isOneToOne: false
+            referencedRelation: "blueprints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integration_usage_logs_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      integrations: {
+        Row: {
+          config: Json
+          created_at: string
+          credential_refs: Json
+          id: string
+          last_validated: string | null
+          name: string
+          status: string | null
+          type: string
+          updated_at: string
+          user_id: string
+          validation_error: string | null
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          credential_refs?: Json
+          id?: string
+          last_validated?: string | null
+          name: string
+          status?: string | null
+          type: string
+          updated_at?: string
+          user_id: string
+          validation_error?: string | null
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          credential_refs?: Json
+          id?: string
+          last_validated?: string | null
+          name?: string
+          status?: string | null
+          type?: string
+          updated_at?: string
+          user_id?: string
+          validation_error?: string | null
+        }
+        Relationships: []
+      }
       optimization_history: {
         Row: {
           after_metrics: Json
@@ -448,6 +544,10 @@ export type Database = {
       complete_simulation: {
         Args: { sim_id: string; final_result?: string; error_msg?: string }
         Returns: undefined
+      }
+      test_integration: {
+        Args: { integration_id: string }
+        Returns: Json
       }
     }
     Enums: {
