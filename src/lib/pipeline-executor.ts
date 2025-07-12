@@ -1,4 +1,13 @@
 import { Node, Edge } from '@xyflow/react';
+import { 
+  InputExecutor, 
+  LLMExecutor, 
+  RAGExecutor, 
+  ProcessorExecutor, 
+  OutputExecutor,
+  ExecutorResult,
+  ExecutorContext
+} from './executors';
 
 export interface NodeConfig {
   testData?: string;
@@ -12,22 +21,6 @@ export interface NodeConfig {
   format?: string;
 }
 
-export interface ExecutionContext {
-  data: any;
-  metadata: {
-    executionTime?: number;
-    timestamp: number;
-    nodeId: string;
-  };
-}
-
-export interface NodeExecutionResult {
-  success: boolean;
-  data?: any;
-  error?: string;
-  executionTime: number;
-}
-
 export interface ExecutionStatus {
   nodeId: string;
   status: 'pending' | 'running' | 'success' | 'error';
@@ -38,246 +31,21 @@ export interface ExecutionStatus {
 
 export type StatusUpdateCallback = (statuses: Map<string, ExecutionStatus>) => void;
 
-class NodeExecutor {
-  async executeInput(node: Node, _context?: ExecutionContext): Promise<NodeExecutionResult> {
-    const startTime = Date.now();
-    
-    try {
-      // For input nodes, return the test data from configuration
-      const config = node.data?.config as NodeConfig || {};
-      const testData = config.testData || 'Default input data';
-      
-      return {
-        success: true,
-        data: testData,
-        executionTime: Date.now() - startTime
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error in input node',
-        executionTime: Date.now() - startTime
-      };
-    }
-  }
-
-  async executeLLM(node: Node, context?: ExecutionContext): Promise<NodeExecutionResult> {
-    const startTime = Date.now();
-    
-    try {
-      // Simulate LLM processing
-      const inputData = context?.data || 'No input provided';
-      const config = node.data?.config as NodeConfig || {};
-      const model = config.model || 'gpt-4o-mini';
-      const temperature = config.temperature || 0.7;
-      const maxTokens = config.maxTokens || 1000;
-
-      // Simulate processing time based on model
-      const processingTime = model.includes('gpt-4o') ? 2000 : 1500;
-      await new Promise(resolve => setTimeout(resolve, processingTime));
-
-      const result = {
-        originalInput: inputData,
-        llmResponse: `Processed by ${model} (temp: ${temperature}, max tokens: ${maxTokens}): ${inputData}`,
-        model,
-        temperature,
-        maxTokens,
-        timestamp: new Date().toISOString()
-      };
-
-      return {
-        success: true,
-        data: result,
-        executionTime: Date.now() - startTime
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error in LLM node',
-        executionTime: Date.now() - startTime
-      };
-    }
-  }
-
-  async executeRAG(node: Node, context?: ExecutionContext): Promise<NodeExecutionResult> {
-    const startTime = Date.now();
-    
-    try {
-      const inputData = context?.data || 'No query provided';
-      const config = node.data?.config as NodeConfig || {};
-      const database = config.database || 'vector-db';
-      const queryTemplate = config.queryTemplate || 'Search for: {query}';
-      const topK = config.topK || 5;
-
-      // Simulate RAG retrieval
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      const query = typeof inputData === 'string' ? inputData : JSON.stringify(inputData);
-      const formattedQuery = queryTemplate.replace('{query}', query);
-
-      const mockResults = Array.from({ length: topK }, (_, i) => ({
-        id: `doc_${i + 1}`,
-        content: `Retrieved document ${i + 1} for query: ${formattedQuery}`,
-        score: 0.9 - (i * 0.1),
-        metadata: {
-          source: `document_${i + 1}.txt`,
-          timestamp: new Date().toISOString()
-        }
-      }));
-
-      const result = {
-        query: formattedQuery,
-        database,
-        topK,
-        results: mockResults,
-        retrievalMetadata: {
-          totalResults: topK,
-          processingTime: Date.now() - startTime
-        }
-      };
-
-      return {
-        success: true,
-        data: result,
-        executionTime: Date.now() - startTime
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error in RAG node',
-        executionTime: Date.now() - startTime
-      };
-    }
-  }
-
-  async executeProcessor(node: Node, context?: ExecutionContext): Promise<NodeExecutionResult> {
-    const startTime = Date.now();
-    
-    try {
-      const inputData = context?.data || {};
-      const config = node.data?.config as NodeConfig || {};
-      const operation = config.operation || 'transform';
-
-      // Simulate processing time
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      let result;
-      switch (operation) {
-        case 'transform':
-          result = {
-            operation,
-            originalData: inputData,
-            transformedData: typeof inputData === 'string' 
-              ? inputData.toUpperCase() 
-              : JSON.stringify(inputData).toUpperCase(),
-            timestamp: new Date().toISOString()
-          };
-          break;
-        case 'filter':
-          result = {
-            operation,
-            originalData: inputData,
-            filteredData: inputData, // In real implementation, apply filtering logic
-            timestamp: new Date().toISOString()
-          };
-          break;
-        case 'validate':
-          result = {
-            operation,
-            data: inputData,
-            isValid: true, // In real implementation, apply validation logic
-            validationRules: ['non-empty', 'valid-format'],
-            timestamp: new Date().toISOString()
-          };
-          break;
-        case 'extract':
-          result = {
-            operation,
-            originalData: inputData,
-            extractedFeatures: {
-              length: typeof inputData === 'string' ? inputData.length : JSON.stringify(inputData).length,
-              type: typeof inputData,
-              hasContent: Boolean(inputData)
-            },
-            timestamp: new Date().toISOString()
-          };
-          break;
-        default:
-          throw new Error(`Unknown processor operation: ${operation}`);
-      }
-
-      return {
-        success: true,
-        data: result,
-        executionTime: Date.now() - startTime
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error in processor node',
-        executionTime: Date.now() - startTime
-      };
-    }
-  }
-
-  async executeOutput(node: Node, context?: ExecutionContext): Promise<NodeExecutionResult> {
-    const startTime = Date.now();
-    
-    try {
-      const inputData = context?.data || {};
-      const config = node.data?.config as NodeConfig || {};
-      const format = config.format || 'text';
-
-      // Simulate output formatting
-      await new Promise(resolve => setTimeout(resolve, 200));
-
-      let formattedOutput;
-      switch (format) {
-        case 'text':
-          formattedOutput = typeof inputData === 'string' ? inputData : JSON.stringify(inputData, null, 2);
-          break;
-        case 'json':
-          formattedOutput = JSON.stringify(inputData, null, 2);
-          break;
-        case 'markdown':
-          formattedOutput = `# Pipeline Output\n\n\`\`\`\n${JSON.stringify(inputData, null, 2)}\n\`\`\``;
-          break;
-        case 'html':
-          formattedOutput = `<div class="pipeline-output"><pre>${JSON.stringify(inputData, null, 2)}</pre></div>`;
-          break;
-        default:
-          formattedOutput = String(inputData);
-      }
-
-      const result = {
-        format,
-        originalData: inputData,
-        formattedOutput,
-        timestamp: new Date().toISOString()
-      };
-
-      return {
-        success: true,
-        data: result,
-        executionTime: Date.now() - startTime
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error in output node',
-        executionTime: Date.now() - startTime
-      };
-    }
-  }
-}
-
 export class PipelineExecutor {
-  private nodeExecutor: NodeExecutor;
+  private inputExecutor: InputExecutor;
+  private llmExecutor: LLMExecutor;
+  private ragExecutor: RAGExecutor;
+  private processorExecutor: ProcessorExecutor;
+  private outputExecutor: OutputExecutor;
   private executionStatuses: Map<string, ExecutionStatus>;
   private nodeData: Map<string, any>;
 
   constructor() {
-    this.nodeExecutor = new NodeExecutor();
+    this.inputExecutor = new InputExecutor();
+    this.llmExecutor = new LLMExecutor();
+    this.ragExecutor = new RAGExecutor();
+    this.processorExecutor = new ProcessorExecutor();
+    this.outputExecutor = new OutputExecutor();
     this.executionStatuses = new Map();
     this.nodeData = new Map();
   }
@@ -346,36 +114,28 @@ export class PipelineExecutor {
       .map(edge => edge.source);
   }
 
-  private async executeNode(node: Node, inputs: ExecutionContext[]): Promise<NodeExecutionResult> {
+  private async executeNode(node: Node, inputs: any[], onStatusUpdate?: (nodeId: string, status: 'pending' | 'running' | 'success' | 'error', data?: any) => void): Promise<ExecutorResult> {
     const nodeType = node.data?.type || node.type;
     
-    // Merge input data if multiple inputs
-    let context: ExecutionContext | undefined;
-    if (inputs.length > 0) {
-      const mergedData = inputs.length === 1 
-        ? inputs[0].data 
-        : inputs.map(input => input.data);
-      
-      context = {
-        data: mergedData,
-        metadata: {
-          timestamp: Date.now(),
-          nodeId: node.id
-        }
-      };
-    }
+    // Prepare context
+    const mergedData = inputs.length === 1 ? inputs[0] : inputs;
+    const context: ExecutorContext = {
+      data: mergedData,
+      nodeId: node.id,
+      onStatusUpdate
+    };
 
     switch (nodeType) {
       case 'input':
-        return this.nodeExecutor.executeInput(node, context);
+        return this.inputExecutor.execute(node, context);
       case 'llm':
-        return this.nodeExecutor.executeLLM(node, context);
+        return this.llmExecutor.execute(node, context);
       case 'rag':
-        return this.nodeExecutor.executeRAG(node, context);
+        return this.ragExecutor.execute(node, context);
       case 'processor':
-        return this.nodeExecutor.executeProcessor(node, context);
+        return this.processorExecutor.execute(node, context);
       case 'output':
-        return this.nodeExecutor.executeOutput(node, context);
+        return this.outputExecutor.execute(node, context);
       default:
         return {
           success: false,
@@ -406,39 +166,35 @@ export class PipelineExecutor {
       // Get execution order
       const executionOrder = this.topologicalSort(nodes, edges);
       
+      // Create status update callback for individual nodes
+      const nodeStatusUpdate = (nodeId: string, status: 'pending' | 'running' | 'success' | 'error', data?: any) => {
+        const currentStatus = this.executionStatuses.get(nodeId);
+        if (currentStatus) {
+          this.executionStatuses.set(nodeId, {
+            ...currentStatus,
+            status,
+            data
+          });
+          if (onStatusUpdate) {
+            onStatusUpdate(new Map(this.executionStatuses));
+          }
+        }
+      };
+      
       // Execute nodes in order
       for (const nodeId of executionOrder) {
         const node = nodes.find(n => n.id === nodeId);
         if (!node) continue;
 
-        // Update status to running
-        this.executionStatuses.set(nodeId, {
-          nodeId,
-          status: 'running'
-        });
-        
-        if (onStatusUpdate) {
-          onStatusUpdate(new Map(this.executionStatuses));
-        }
-
         try {
           // Get input data from predecessor nodes
           const inputNodeIds = this.getNodeInputs(nodeId, edges);
-          const inputs: ExecutionContext[] = inputNodeIds
-            .map(inputId => {
-              const data = this.nodeData.get(inputId);
-              return data ? {
-                data,
-                metadata: {
-                  timestamp: Date.now(),
-                  nodeId: inputId
-                }
-              } : null;
-            })
-            .filter(Boolean) as ExecutionContext[];
+          const inputs = inputNodeIds
+            .map(inputId => this.nodeData.get(inputId))
+            .filter(Boolean);
 
           // Execute the node
-          const result = await this.executeNode(node, inputs);
+          const result = await this.executeNode(node, inputs, nodeStatusUpdate);
 
           // Update status based on result
           if (result.success) {
