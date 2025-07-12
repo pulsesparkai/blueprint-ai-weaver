@@ -34,11 +34,11 @@ export function useCollaboration(
       channel
         .on('presence', { event: 'sync' }, () => {
           const presenceState = channel.presenceState();
-          const users = Object.values(presenceState).flat() as CollaborationUser[];
+          const users = Object.values(presenceState).flat() as unknown as CollaborationUser[];
           setActiveUsers(users);
         })
         .on('presence', { event: 'join' }, ({ key, newPresences }) => {
-          const newUser = newPresences[0] as CollaborationUser;
+          const newUser = newPresences[0] as unknown as CollaborationUser;
           setActiveUsers(prev => [...prev, newUser]);
           options.onUserJoin?.(key);
         })

@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, renderHook, act } from '@testing-library/react';
 import { useState } from 'react';
-import { useCollaboration } from '../useCollaboration';
+import { useCollaboration } from '@/hooks/useCollaboration';
 import { supabase } from '@/integrations/supabase/client';
 
 // Mock Supabase
