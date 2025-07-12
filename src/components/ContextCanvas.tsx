@@ -170,15 +170,34 @@ export function ContextCanvas({ onAddNode, blueprint, validationResults }: Conte
   };
 
   const handleAddNode = (nodeType: any) => {
+    // Null/undefined check
+    if (!nodeType || !nodeType.id || !nodeType.label) {
+      console.error('Invalid nodeType passed to handleAddNode:', nodeType);
+      toast({
+        title: "Error adding node",
+        description: "Invalid node configuration",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Generate unique ID with fallback
+    const generateId = () => {
+      if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
+      }
+      return `${nodeType.id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    };
+
     const newNode: Node = {
-      id: `${nodeType.id}-${Date.now()}`,
+      id: generateId(),
       type: nodeType.id,
       position: { x: Math.random() * 400 + 100, y: Math.random() * 400 + 100 },
       data: {
         label: nodeType.label,
-        type: nodeType.category,
-        icon: nodeType.icon,
-        variant: nodeType.variant,
+        type: nodeType.category || 'default',
+        icon: nodeType.icon || 'Circle',
+        variant: nodeType.variant || 'default',
         ...getDefaultNodeData(nodeType.id)
       },
     };
