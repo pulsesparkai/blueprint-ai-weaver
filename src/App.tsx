@@ -13,6 +13,7 @@ import Templates from "./pages/Templates";
 import Integrations from "./pages/Integrations";
 import ApiKeys from "./pages/ApiKeys";
 import TestIntegrations from "./pages/TestIntegrations";
+import Billing from "./pages/Billing";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,6 +35,7 @@ const App = () => (
               <Route path="/integrations" element={<Integrations />} />
               <Route path="/test-integrations" element={<TestIntegrations />} />
               <Route path="/api-keys" element={<ApiKeys />} />
+              <Route path="/billing" element={<Billing />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
