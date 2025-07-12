@@ -32,11 +32,13 @@ interface IntegrationForm {
 }
 
 const INTEGRATION_TYPES = [
+  // Vector Databases
   {
     id: 'pinecone',
     name: 'Pinecone',
     description: 'Managed vector database service',
     icon: '🌲',
+    category: 'vector-db',
     fields: {
       config: [
         { key: 'indexName', label: 'Index Name', type: 'text', placeholder: 'my-index' },
@@ -52,6 +54,7 @@ const INTEGRATION_TYPES = [
     name: 'Weaviate',
     description: 'Open-source vector database',
     icon: '🔷',
+    category: 'vector-db',
     fields: {
       config: [
         { key: 'endpoint', label: 'Endpoint URL', type: 'text', placeholder: 'https://your-cluster.weaviate.network' },
@@ -67,6 +70,7 @@ const INTEGRATION_TYPES = [
     name: 'Qdrant',
     description: 'Vector similarity search engine',
     icon: '⚡',
+    category: 'vector-db',
     fields: {
       config: [
         { key: 'endpoint', label: 'Endpoint URL', type: 'text', placeholder: 'https://your-cluster.qdrant.io' },
@@ -82,12 +86,182 @@ const INTEGRATION_TYPES = [
     name: 'Chroma',
     description: 'Open-source embedding database',
     icon: '🎨',
+    category: 'vector-db',
     fields: {
       config: [
         { key: 'endpoint', label: 'Endpoint URL', type: 'text', placeholder: 'http://localhost:8000' },
         { key: 'collectionName', label: 'Collection Name', type: 'text', placeholder: 'my-collection' }
       ],
       credentials: []
+    }
+  },
+  
+  // Knowledge Sources
+  {
+    id: 'notion',
+    name: 'Notion',
+    description: 'Pages and databases as knowledge bases',
+    icon: '🔲',
+    category: 'knowledge',
+    isOAuth: true,
+    tier: 'pro',
+    fields: {
+      config: [
+        { key: 'dataTypes', label: 'Data Types', type: 'multi-select', options: ['pages', 'databases'], defaultValue: ['pages'] }
+      ],
+      credentials: []
+    }
+  },
+  {
+    id: 'google-workspace',
+    name: 'Google Workspace',
+    description: 'Docs, Sheets, and Drive content',
+    icon: '📄',
+    category: 'knowledge',
+    isOAuth: true,
+    tier: 'pro',
+    fields: {
+      config: [
+        { key: 'dataTypes', label: 'Data Types', type: 'multi-select', options: ['documents', 'sheets', 'slides'], defaultValue: ['documents'] },
+        { key: 'folderFilter', label: 'Folder Filter (optional)', type: 'text', placeholder: 'Folder ID or name' }
+      ],
+      credentials: []
+    }
+  },
+  {
+    id: 'microsoft-365',
+    name: 'Microsoft 365',
+    description: 'Office documents and Outlook data',
+    icon: '🔵',
+    category: 'knowledge',
+    isOAuth: true,
+    tier: 'pro',
+    fields: {
+      config: [
+        { key: 'dataTypes', label: 'Data Types', type: 'multi-select', options: ['documents', 'emails', 'teams'], defaultValue: ['documents'] },
+        { key: 'includeAttachments', label: 'Include Attachments', type: 'checkbox', defaultValue: false }
+      ],
+      credentials: []
+    }
+  },
+  {
+    id: 'salesforce',
+    name: 'Salesforce',
+    description: 'CRM records and knowledge articles',
+    icon: '☁️',
+    category: 'crm',
+    tier: 'enterprise',
+    fields: {
+      config: [
+        { key: 'instanceUrl', label: 'Instance URL', type: 'text', placeholder: 'https://your-domain.salesforce.com' },
+        { key: 'objectTypes', label: 'Object Types', type: 'multi-select', options: ['Account', 'Contact', 'Lead', 'Opportunity', 'Case'], defaultValue: ['Account', 'Contact'] }
+      ],
+      credentials: [
+        { key: 'consumerKey', label: 'Consumer Key', type: 'password', placeholder: 'Your connected app consumer key' },
+        { key: 'consumerSecret', label: 'Consumer Secret', type: 'password', placeholder: 'Your connected app consumer secret' },
+        { key: 'accessToken', label: 'Access Token', type: 'password', placeholder: 'Your access token' }
+      ]
+    }
+  },
+  
+  // Productivity Apps
+  {
+    id: 'trello',
+    name: 'Trello',
+    description: 'Boards, lists, and cards',
+    icon: '📋',
+    category: 'productivity',
+    fields: {
+      config: [
+        { key: 'boardIds', label: 'Board IDs (comma-separated)', type: 'text', placeholder: 'board1,board2,board3' }
+      ],
+      credentials: [
+        { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'Your Trello API key' },
+        { key: 'token', label: 'Token', type: 'password', placeholder: 'Your Trello token' }
+      ]
+    }
+  },
+  {
+    id: 'evernote',
+    name: 'Evernote',
+    description: 'Notes and notebooks',
+    icon: '🐘',
+    category: 'productivity',
+    fields: {
+      config: [
+        { key: 'sandbox', label: 'Use Sandbox', type: 'checkbox', defaultValue: false }
+      ],
+      credentials: [
+        { key: 'developerToken', label: 'Developer Token', type: 'password', placeholder: 'Your Evernote developer token' }
+      ]
+    }
+  },
+  {
+    id: 'todoist',
+    name: 'Todoist',
+    description: 'Tasks and projects',
+    icon: '✅',
+    category: 'productivity',
+    fields: {
+      config: [
+        { key: 'includeCompleted', label: 'Include Completed Tasks', type: 'checkbox', defaultValue: false }
+      ],
+      credentials: [
+        { key: 'apiToken', label: 'API Token', type: 'password', placeholder: 'Your Todoist API token' }
+      ]
+    }
+  },
+  
+  // Design & Creative
+  {
+    id: 'canva',
+    name: 'Canva',
+    description: 'Design assets and templates',
+    icon: '🎨',
+    category: 'creative',
+    tier: 'pro',
+    fields: {
+      config: [
+        { key: 'teamId', label: 'Team ID (optional)', type: 'text', placeholder: 'Your team ID' }
+      ],
+      credentials: [
+        { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'Your Canva API key' }
+      ]
+    }
+  },
+  
+  // Forms & Surveys
+  {
+    id: 'typeform',
+    name: 'Typeform',
+    description: 'Form responses and analytics',
+    icon: '📝',
+    category: 'forms',
+    fields: {
+      config: [
+        { key: 'formIds', label: 'Form IDs (comma-separated)', type: 'text', placeholder: 'form1,form2,form3' }
+      ],
+      credentials: [
+        { key: 'personalAccessToken', label: 'Personal Access Token', type: 'password', placeholder: 'Your Typeform PAT' }
+      ]
+    }
+  },
+  
+  // Automation
+  {
+    id: 'zapier',
+    name: 'Zapier',
+    description: 'Webhook triggers and automations',
+    icon: '⚡',
+    category: 'automation',
+    tier: 'enterprise',
+    fields: {
+      config: [
+        { key: 'triggerEvents', label: 'Trigger Events', type: 'multi-select', options: ['blueprint_saved', 'simulation_completed', 'optimization_applied'], defaultValue: ['blueprint_saved'] }
+      ],
+      credentials: [
+        { key: 'webhookUrl', label: 'Webhook URL', type: 'text', placeholder: 'https://hooks.zapier.com/hooks/catch/...' }
+      ]
     }
   }
 ];
@@ -253,6 +427,43 @@ export default function IntegrationsPage() {
     }));
   };
 
+  const handleOAuthStart = async (provider: string) => {
+    try {
+      const redirectUri = `${window.location.origin}/integrations/oauth-callback`;
+      
+      const { data, error } = await supabase.functions.invoke('integration-manager', {
+        body: {
+          action: 'oauth-start',
+          provider,
+          redirectUri
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        // Store provider info for callback
+        localStorage.setItem('oauth_provider', provider);
+        localStorage.setItem('oauth_redirect_uri', redirectUri);
+        
+        // Redirect to OAuth provider
+        window.location.href = data.authUrl;
+      } else {
+        toast({
+          title: "OAuth Error",
+          description: data.error,
+          variant: "destructive"
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "OAuth Failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
+
   const selectedIntegrationType = INTEGRATION_TYPES.find(t => t.id === form.type);
 
   if (loading) {
@@ -371,33 +582,62 @@ export default function IntegrationsPage() {
         </TabsContent>
 
         <TabsContent value="browse" className="space-y-4">
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {INTEGRATION_TYPES.map((type) => (
-              <Card key={type.id} className="cursor-pointer hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <div className="text-3xl">{type.icon}</div>
-                    <div>
-                      <CardTitle className="text-lg">{type.name}</CardTitle>
-                      <CardDescription>{type.description}</CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <Button 
-                    className="w-full" 
-                    onClick={() => {
-                      setForm(prev => ({ ...prev, type: type.id }));
-                      setShowCreateModal(true);
-                    }}
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Connect {type.name}
-                  </Button>
-                </CardContent>
-              </Card>
+          <Tabs defaultValue="vector-db" className="w-full">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="vector-db">Vector DBs</TabsTrigger>
+              <TabsTrigger value="knowledge">Knowledge</TabsTrigger>
+              <TabsTrigger value="productivity">Productivity</TabsTrigger>
+              <TabsTrigger value="automation">Automation</TabsTrigger>
+            </TabsList>
+
+            {['vector-db', 'knowledge', 'productivity', 'automation'].map((category) => (
+              <TabsContent key={category} value={category} className="space-y-4">
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {INTEGRATION_TYPES
+                    .filter(type => type.category === category || 
+                      (category === 'productivity' && ['crm', 'creative', 'forms'].includes(type.category || '')) ||
+                      (category === 'automation' && type.category === 'automation'))
+                    .map((type) => (
+                    <Card key={type.id} className="cursor-pointer hover:shadow-md transition-shadow relative">
+                      {type.tier && (
+                        <Badge 
+                          variant={type.tier === 'enterprise' ? 'destructive' : 'secondary'} 
+                          className="absolute top-2 right-2 text-xs"
+                        >
+                          {type.tier.toUpperCase()}
+                        </Badge>
+                      )}
+                      <CardHeader>
+                        <div className="flex items-center gap-3">
+                          <div className="text-3xl">{type.icon}</div>
+                          <div>
+                            <CardTitle className="text-lg">{type.name}</CardTitle>
+                            <CardDescription>{type.description}</CardDescription>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <Button 
+                          className="w-full" 
+                          onClick={() => {
+                            if (type.isOAuth) {
+                              handleOAuthStart(type.id);
+                            } else {
+                              setForm(prev => ({ ...prev, type: type.id }));
+                              setShowCreateModal(true);
+                            }
+                          }}
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          {type.isOAuth ? 'Connect with OAuth' : `Connect ${type.name}`}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </TabsContent>
             ))}
-          </div>
+          </Tabs>
         </TabsContent>
       </Tabs>
 

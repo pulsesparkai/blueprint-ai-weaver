@@ -93,6 +93,79 @@ export function NodeConfigModal() {
     }
   };
 
+  const fetchDataPreview = async (integrationId: string, integrationType: string) => {
+    try {
+      const dataType = integrationType === 'notion' ? 'pages' : 'documents';
+      
+      const { data, error } = await supabase.functions.invoke('integration-manager', {
+        body: {
+          action: 'fetch-data',
+          integrationId,
+          dataType
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        updateData('dataPreview', data.data);
+        toast({
+          title: "Data Preview Loaded",
+          description: `Found ${data.data.length} available items`
+        });
+      } else {
+        toast({
+          title: "Failed to Load Data",
+          description: "Could not fetch data preview",
+          variant: "destructive"
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Preview Failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
+
+  const testWebhook = async (integrationId: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('integration-manager', {
+        body: {
+          action: 'webhook-trigger',
+          integrationId,
+          webhookData: {
+            event: 'test',
+            message: 'Test webhook from RAG configuration',
+            timestamp: new Date().toISOString()
+          }
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        toast({
+          title: "Webhook Test Successful",
+          description: "Check your Zapier dashboard for the test event"
+        });
+      } else {
+        toast({
+          title: "Webhook Test Failed",
+          description: "Could not trigger webhook",
+          variant: "destructive"
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Webhook Failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
+
   const handleSave = () => {
     if (selectedNode) {
       dispatch({
@@ -190,8 +263,8 @@ export function NodeConfigModal() {
           </div>
 
           {selectedIntegration && (
-            <div className="p-3 bg-muted/30 rounded-lg border">
-              <div className="flex items-center justify-between mb-2">
+            <div className="p-3 bg-muted/30 rounded-lg border space-y-3">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{selectedIntegration.name}</span>
                   <Badge variant={selectedIntegration.status === 'active' ? 'default' : 'destructive'}>
@@ -222,6 +295,52 @@ export function NodeConfigModal() {
                   <div className="text-destructive">Error: {selectedIntegration.validation_error}</div>
                 )}
               </div>
+
+              {/* Data Source Preview for Knowledge Apps */}
+              {['notion', 'google-workspace', 'microsoft-365'].includes(selectedIntegration.type) && (
+                <div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => fetchDataPreview(selectedIntegration.id, selectedIntegration.type)}
+                    className="w-full"
+                  >
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    Preview Available Data
+                  </Button>
+                  {localData.dataPreview && (
+                    <div className="mt-2 p-2 bg-background rounded border text-xs max-h-32 overflow-y-auto">
+                      <div className="font-medium mb-1">Available data sources:</div>
+                      {localData.dataPreview.slice(0, 5).map((item: any, index: number) => (
+                        <div key={index} className="truncate">
+                          • {item.title || item.name || 'Untitled'}
+                        </div>
+                      ))}
+                      {localData.dataPreview.length > 5 && (
+                        <div className="text-muted-foreground">+ {localData.dataPreview.length - 5} more...</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Webhook Configuration for Zapier */}
+              {selectedIntegration.type === 'zapier' && (
+                <div className="space-y-2">
+                  <div className="text-xs font-medium">Webhook Events</div>
+                  <div className="text-xs text-muted-foreground">
+                    This Zapier integration will trigger on: blueprint saves, simulation completions
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => testWebhook(selectedIntegration.id)}
+                    className="w-full"
+                  >
+                    Test Webhook
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 

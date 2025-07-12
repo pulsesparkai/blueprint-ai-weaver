@@ -11,6 +11,7 @@ import Dashboard from "./pages/Dashboard";
 import Editor from "./pages/Editor";
 import Templates from "./pages/Templates";
 import Integrations from "./pages/Integrations";
+import IntegrationsOAuthCallback from "./pages/IntegrationsOAuthCallback";
 import ApiKeys from "./pages/ApiKeys";
 import TestIntegrations from "./pages/TestIntegrations";
 import Billing from "./pages/Billing";
@@ -31,8 +32,9 @@ const App = () => (
               <Route path="/auth" element={<Auth />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/editor/:id?" element={<Editor />} />
-              <Route path="/templates" element={<Templates />} />
-              <Route path="/integrations" element={<Integrations />} />
+          <Route path="/templates" element={<Templates />} />
+          <Route path="/integrations" element={<Integrations />} />
+          <Route path="/integrations/oauth-callback" element={<IntegrationsOAuthCallback />} />
               <Route path="/test-integrations" element={<TestIntegrations />} />
               <Route path="/api-keys" element={<ApiKeys />} />
               <Route path="/billing" element={<Billing />} />

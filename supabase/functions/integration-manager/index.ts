@@ -8,12 +8,17 @@ const corsHeaders = {
 };
 
 interface IntegrationRequest {
-  action: 'create' | 'test' | 'list' | 'update' | 'delete';
+  action: 'create' | 'test' | 'list' | 'update' | 'delete' | 'oauth-start' | 'oauth-callback' | 'fetch-data' | 'webhook-trigger';
   integrationId?: string;
   name?: string;
   type?: string;
   config?: any;
   credentials?: any;
+  provider?: string;
+  redirectUri?: string;
+  code?: string;
+  dataType?: string;
+  webhookData?: any;
 }
 
 // Encryption helpers for temporary credential storage
@@ -248,6 +253,92 @@ async function validateChromaIntegration(config: any, credentials: any): Promise
   }
 }
 
+// New app integration validators
+async function validateNotionIntegration(config: any, credentials: any): Promise<{ success: boolean; error?: string; metadata?: any }> {
+  try {
+    const { accessToken } = credentials;
+    if (!accessToken) {
+      return { success: false, error: 'Notion access token required' };
+    }
+
+    const response = await fetch('https://api.notion.com/v1/users/me', {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Notion-Version': '2022-06-28'
+      }
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      return { success: false, error: `Notion API error: ${error}` };
+    }
+
+    const userData = await response.json();
+    return { 
+      success: true, 
+      metadata: { 
+        user: userData.name,
+        workspace: userData.owner?.workspace 
+      }
+    };
+  } catch (error: any) {
+    return { success: false, error: `Notion validation failed: ${error.message}` };
+  }
+}
+
+async function validateGoogleWorkspaceIntegration(config: any, credentials: any): Promise<{ success: boolean; error?: string; metadata?: any }> {
+  try {
+    const { accessToken } = credentials;
+    if (!accessToken) {
+      return { success: false, error: 'Google access token required' };
+    }
+
+    const response = await fetch('https://www.googleapis.com/drive/v3/about?fields=user', {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      return { success: false, error: `Google API error: ${error}` };
+    }
+
+    const userData = await response.json();
+    return { 
+      success: true, 
+      metadata: { 
+        user: userData.user?.displayName,
+        email: userData.user?.emailAddress 
+      }
+    };
+  } catch (error: any) {
+    return { success: false, error: `Google Workspace validation failed: ${error.message}` };
+  }
+}
+
+async function validateZapierIntegration(config: any, credentials: any): Promise<{ success: boolean; error?: string; metadata?: any }> {
+  try {
+    const { webhookUrl } = credentials;
+    if (!webhookUrl) {
+      return { success: false, error: 'Zapier webhook URL required' };
+    }
+
+    // Test webhook with a ping
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ test: true, timestamp: new Date().toISOString() })
+    });
+
+    return { 
+      success: response.ok, 
+      error: response.ok ? undefined : `Webhook test failed: ${response.status}`,
+      metadata: { webhookStatus: response.status }
+    };
+  } catch (error: any) {
+    return { success: false, error: `Zapier validation failed: ${error.message}` };
+  }
+}
+
 async function validateIntegration(type: string, config: any, credentials: any): Promise<{ success: boolean; error?: string; metadata?: any }> {
   switch (type) {
     case 'pinecone':
@@ -258,8 +349,304 @@ async function validateIntegration(type: string, config: any, credentials: any):
       return await validateQdrantIntegration(config, credentials);
     case 'chroma':
       return await validateChromaIntegration(config, credentials);
+    case 'notion':
+      return await validateNotionIntegration(config, credentials);
+    case 'google-workspace':
+      return await validateGoogleWorkspaceIntegration(config, credentials);
+    case 'zapier':
+      return await validateZapierIntegration(config, credentials);
+    // For other app integrations, return success for now
+    case 'microsoft-365':
+    case 'salesforce':
+    case 'trello':
+    case 'evernote':
+    case 'todoist':
+    case 'canva':
+    case 'typeform':
+      return { success: true, metadata: { type } };
     default:
       return { success: false, error: `Unsupported integration type: ${type}` };
+  }
+}
+
+// OAuth helper functions
+async function generateOAuthUrl(provider: string, redirectUri: string): Promise<string> {
+  const baseUrls: Record<string, string> = {
+    'notion': `https://api.notion.com/v1/oauth/authorize?client_id=${Deno.env.get('NOTION_CLIENT_ID')}&response_type=code&owner=user&redirect_uri=${encodeURIComponent(redirectUri)}`,
+    'google-workspace': `https://accounts.google.com/o/oauth2/auth?client_id=${Deno.env.get('GOOGLE_CLIENT_ID')}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent('https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/documents.readonly')}&response_type=code&access_type=offline`,
+    'microsoft-365': `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${Deno.env.get('MICROSOFT_CLIENT_ID')}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent('https://graph.microsoft.com/Files.Read https://graph.microsoft.com/Mail.Read')}`
+  };
+
+  const authUrl = baseUrls[provider];
+  if (!authUrl) {
+    throw new Error(`OAuth not supported for provider: ${provider}`);
+  }
+
+  return authUrl;
+}
+
+async function handleOAuthCallback(supabaseClient: any, userId: string, provider: string, code: string, redirectUri: string, integrationName?: string): Promise<any> {
+  let tokenData: any = {};
+
+  switch (provider) {
+    case 'notion':
+      tokenData = await exchangeNotionCode(code, redirectUri);
+      break;
+    case 'google-workspace':
+      tokenData = await exchangeGoogleCode(code, redirectUri);
+      break;
+    case 'microsoft-365':
+      tokenData = await exchangeMicrosoftCode(code, redirectUri);
+      break;
+    default:
+      throw new Error(`OAuth callback not supported for provider: ${provider}`);
+  }
+
+  // Store the OAuth tokens securely
+  const encryptionKey = Deno.env.get('INTEGRATION_ENCRYPTION_KEY') || 'default-key-change-in-production';
+  const encryptedTokens = await encryptCredentials(tokenData, encryptionKey);
+  const credentialRef = `oauth_${Date.now()}_${userId}`;
+
+  await supabaseClient
+    .from('integration_credentials')
+    .insert({
+      user_id: userId,
+      credential_ref: credentialRef,
+      encrypted_data: encryptedTokens,
+      expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString() // 1 year
+    });
+
+  // Create integration record
+  const { data: integration, error } = await supabaseClient
+    .from('integrations')
+    .insert({
+      user_id: userId,
+      name: integrationName || `${provider} Integration`,
+      type: provider,
+      config: { 
+        connected_at: new Date().toISOString(),
+        oauth: true
+      },
+      credential_refs: { oauth_ref: credentialRef },
+      status: 'active',
+      last_validated: new Date().toISOString()
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return integration;
+}
+
+async function exchangeNotionCode(code: string, redirectUri: string): Promise<any> {
+  const credentials = btoa(`${Deno.env.get('NOTION_CLIENT_ID')}:${Deno.env.get('NOTION_CLIENT_SECRET')}`);
+  
+  const response = await fetch('https://api.notion.com/v1/oauth/token', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${credentials}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: redirectUri
+    })
+  });
+
+  const data = await response.json();
+  return {
+    accessToken: data.access_token,
+    workspaceName: data.workspace_name
+  };
+}
+
+async function exchangeGoogleCode(code: string, redirectUri: string): Promise<any> {
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: Deno.env.get('GOOGLE_CLIENT_ID') || '',
+      client_secret: Deno.env.get('GOOGLE_CLIENT_SECRET') || '',
+      code,
+      grant_type: 'authorization_code',
+      redirect_uri: redirectUri
+    })
+  });
+
+  const tokens = await response.json();
+  return {
+    accessToken: tokens.access_token,
+    refreshToken: tokens.refresh_token
+  };
+}
+
+async function exchangeMicrosoftCode(code: string, redirectUri: string): Promise<any> {
+  const response = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: Deno.env.get('MICROSOFT_CLIENT_ID') || '',
+      client_secret: Deno.env.get('MICROSOFT_CLIENT_SECRET') || '',
+      code,
+      grant_type: 'authorization_code',
+      redirect_uri: redirectUri
+    })
+  });
+
+  const tokens = await response.json();
+  return {
+    accessToken: tokens.access_token,
+    refreshToken: tokens.refresh_token
+  };
+}
+
+// Data fetching functions
+async function fetchIntegrationData(supabaseClient: any, userId: string, integrationId: string, dataType: string, encryptionKey: string): Promise<any> {
+  // Get integration
+  const { data: integration, error } = await supabaseClient
+    .from('integrations')
+    .select('*')
+    .eq('id', integrationId)
+    .eq('user_id', userId)
+    .single();
+
+  if (error) throw error;
+
+  // Get credentials
+  const credRef = integration.credential_refs?.oauth_ref || integration.credential_refs?.encrypted_ref;
+  if (!credRef) {
+    throw new Error('No credentials found for this integration');
+  }
+
+  const { data: credData, error: credError } = await supabaseClient
+    .from('integration_credentials')
+    .select('encrypted_data')
+    .eq('credential_ref', credRef)
+    .eq('user_id', userId)
+    .single();
+
+  if (credError) throw credError;
+
+  const credentials = await decryptCredentials(credData.encrypted_data, encryptionKey);
+
+  switch (integration.type) {
+    case 'notion':
+      return await fetchNotionData(credentials, dataType);
+    case 'google-workspace':
+      return await fetchGoogleWorkspaceData(credentials, dataType);
+    case 'microsoft-365':
+      return await fetchMicrosoft365Data(credentials, dataType);
+    default:
+      throw new Error(`Data fetching not supported for ${integration.type}`);
+  }
+}
+
+async function fetchNotionData(credentials: any, dataType: string): Promise<any> {
+  const response = await fetch('https://api.notion.com/v1/search', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${credentials.accessToken}`,
+      'Notion-Version': '2022-06-28',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      filter: { property: 'object', value: 'page' },
+      page_size: 100
+    })
+  });
+
+  const data = await response.json();
+  return data.results?.map((page: any) => ({
+    id: page.id,
+    title: page.properties?.title?.title?.[0]?.plain_text || 'Untitled',
+    url: page.url,
+    created_time: page.created_time,
+    last_edited_time: page.last_edited_time
+  })) || [];
+}
+
+async function fetchGoogleWorkspaceData(credentials: any, dataType: string): Promise<any> {
+  if (dataType === 'documents') {
+    const response = await fetch('https://www.googleapis.com/drive/v3/files?q=mimeType%3D%27application%2Fvnd.google-apps.document%27&fields=files(id%2Cname%2CmodifiedTime%2CwebViewLink)', {
+      headers: { Authorization: `Bearer ${credentials.accessToken}` }
+    });
+    const data = await response.json();
+    return data.files || [];
+  }
+  
+  return [];
+}
+
+async function fetchMicrosoft365Data(credentials: any, dataType: string): Promise<any> {
+  if (dataType === 'documents') {
+    const response = await fetch('https://graph.microsoft.com/v1.0/me/drive/root/children?filter=file%20ne%20null', {
+      headers: { Authorization: `Bearer ${credentials.accessToken}` }
+    });
+    const data = await response.json();
+    return data.value || [];
+  }
+
+  return [];
+}
+
+// Webhook trigger function
+async function triggerWebhook(supabaseClient: any, userId: string, integrationId: string, webhookData: any, encryptionKey: string): Promise<void> {
+  // Get integration
+  const { data: integration, error } = await supabaseClient
+    .from('integrations')
+    .select('*')
+    .eq('id', integrationId)
+    .eq('user_id', userId)
+    .single();
+
+  if (error) throw error;
+
+  if (integration.type !== 'zapier') {
+    throw new Error('Webhook triggers only supported for Zapier integrations');
+  }
+
+  // Get webhook URL from credentials
+  const credRef = integration.credential_refs?.encrypted_ref;
+  if (!credRef) {
+    throw new Error('No webhook URL found for this integration');
+  }
+
+  const { data: credData, error: credError } = await supabaseClient
+    .from('integration_credentials')
+    .select('encrypted_data')
+    .eq('credential_ref', credRef)
+    .eq('user_id', userId)
+    .single();
+
+  if (credError) throw credError;
+
+  const credentials = await decryptCredentials(credData.encrypted_data, encryptionKey);
+
+  // Trigger webhook
+  const response = await fetch(credentials.webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      ...webhookData,
+      timestamp: new Date().toISOString(),
+      user_id: userId
+    })
+  });
+
+  // Log usage
+  await supabaseClient
+    .from('integration_usage_logs')
+    .insert({
+      integration_id: integrationId,
+      user_id: userId,
+      operation_type: 'webhook',
+      success: response.ok,
+      error_message: response.ok ? null : `Webhook failed: ${response.status}`
+    });
+
+  if (!response.ok) {
+    throw new Error(`Webhook trigger failed: ${response.status}`);
   }
 }
 
@@ -285,7 +672,7 @@ serve(async (req) => {
       throw new Error('Invalid authentication');
     }
 
-    const { action, integrationId, name, type, config, credentials }: IntegrationRequest = await req.json();
+    const { action, integrationId, name, type, config, credentials, provider, redirectUri, code, dataType, webhookData }: IntegrationRequest = await req.json();
     
     const encryptionKey = Deno.env.get('INTEGRATION_ENCRYPTION_KEY') || 'default-key-change-in-production';
 
@@ -463,6 +850,62 @@ serve(async (req) => {
         return new Response(JSON.stringify({
           success: true,
           message: 'Integration deleted successfully'
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+
+      case 'oauth-start':
+        if (!provider || !redirectUri) {
+          throw new Error('Provider and redirect URI required for OAuth start');
+        }
+        
+        const authUrl = await generateOAuthUrl(provider, redirectUri);
+        
+        return new Response(JSON.stringify({
+          success: true,
+          authUrl
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+
+      case 'oauth-callback':
+        if (!provider || !code || !redirectUri) {
+          throw new Error('Provider, code, and redirect URI required for OAuth callback');
+        }
+        
+        const oauthResult = await handleOAuthCallback(supabaseClient, user.id, provider, code, redirectUri, name);
+        
+        return new Response(JSON.stringify({
+          success: true,
+          integration: oauthResult
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+
+      case 'fetch-data':
+        if (!integrationId || !dataType) {
+          throw new Error('Integration ID and data type required for fetching data');
+        }
+        
+        const fetchedData = await fetchIntegrationData(supabaseClient, user.id, integrationId, dataType, encryptionKey);
+        
+        return new Response(JSON.stringify({
+          success: true,
+          data: fetchedData
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+
+      case 'webhook-trigger':
+        if (!integrationId || !webhookData) {
+          throw new Error('Integration ID and webhook data required');
+        }
+        
+        await triggerWebhook(supabaseClient, user.id, integrationId, webhookData, encryptionKey);
+        
+        return new Response(JSON.stringify({
+          success: true,
+          message: 'Webhook triggered successfully'
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
