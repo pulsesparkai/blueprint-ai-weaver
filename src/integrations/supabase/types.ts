@@ -184,6 +184,33 @@ export type Database = {
           },
         ]
       }
+      integration_credentials: {
+        Row: {
+          created_at: string
+          credential_ref: string
+          encrypted_data: string
+          expires_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          credential_ref: string
+          encrypted_data: string
+          expires_at: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          credential_ref?: string
+          encrypted_data?: string
+          expires_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       integration_usage_logs: {
         Row: {
           blueprint_id: string | null
@@ -536,6 +563,10 @@ export type Database = {
       apply_optimization: {
         Args: { optimization_id: string }
         Returns: boolean
+      }
+      cleanup_expired_credentials: {
+        Args: Record<PropertyKey, never>
+        Returns: number
       }
       cleanup_expired_sessions: {
         Args: Record<PropertyKey, never>
