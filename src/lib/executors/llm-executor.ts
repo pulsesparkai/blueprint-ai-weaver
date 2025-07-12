@@ -10,16 +10,21 @@ export class LLMExecutor {
       // Update status to running
       context.onStatusUpdate?.(context.nodeId, 'running');
       
-      // Get configuration from node
       const config = node.data?.config as {
         model?: string;
         temperature?: number;
         maxTokens?: number;
+        integrationId?: string;
       } || {};
       
       const model = config.model || 'gpt-4o-mini';
       const temperature = config.temperature || 0.7;
       const maxTokens = config.maxTokens || 1000;
+      const integrationId = config.integrationId;
+      
+      if (!integrationId) {
+        throw new Error('LLM integration not configured. Please select an integration in node settings.');
+      }
       
       // Prepare input data
       let inputText = '';
@@ -31,13 +36,14 @@ export class LLMExecutor {
         inputText = JSON.stringify(context.data);
       }
       
-      // Call LLM Edge Function
-      const { data, error } = await supabase.functions.invoke('llm-processor', {
+      // Call LLM API Edge Function
+      const { data, error } = await supabase.functions.invoke('api-llm', {
         body: {
+          integration_id: integrationId,
           prompt: inputText,
           model,
           temperature,
-          maxTokens
+          max_tokens: maxTokens
         }
       });
       
@@ -52,6 +58,7 @@ export class LLMExecutor {
         model,
         temperature,
         maxTokens,
+        tokensUsed: data.tokens_used || 0,
         timestamp: new Date().toISOString(),
         nodeId: node.id
       };

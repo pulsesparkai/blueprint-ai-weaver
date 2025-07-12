@@ -10,16 +10,21 @@ export class RAGExecutor {
       // Update status to running
       context.onStatusUpdate?.(context.nodeId, 'running');
       
-      // Get configuration from node
       const config = node.data?.config as {
         database?: string;
         queryTemplate?: string;
         topK?: number;
+        integrationId?: string;
       } || {};
       
       const database = config.database || 'vector-db';
       const queryTemplate = config.queryTemplate || 'Search for: {query}';
       const topK = config.topK || 5;
+      const integrationId = config.integrationId;
+      
+      if (!integrationId) {
+        throw new Error('RAG integration not configured. Please select an integration in node settings.');
+      }
       
       // Prepare query
       let query = '';
@@ -33,12 +38,12 @@ export class RAGExecutor {
       
       const formattedQuery = queryTemplate.replace('{query}', query);
       
-      // Call RAG Edge Function
-      const { data, error } = await supabase.functions.invoke('rag-retriever', {
+      // Call RAG API Edge Function
+      const { data, error } = await supabase.functions.invoke('api-rag', {
         body: {
+          integration_id: integrationId,
           query: formattedQuery,
-          database,
-          topK
+          top_k: topK
         }
       });
       
