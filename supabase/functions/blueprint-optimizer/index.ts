@@ -1,6 +1,9 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
+// Import text processing libraries for advanced optimization
+import { RecursiveCharacterTextSplitter } from "https://esm.sh/@langchain/textsplitters@0.1.0";
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -21,14 +24,46 @@ interface OptimizationMetrics {
   unusedNodes: number;
 }
 
-// Text compression using simple heuristics (in production, you'd use more sophisticated NLP)
+// Advanced text compression using LangChain and heuristics
+async function compressTextAdvanced(text: string, compressionLevel: number = 0.3): Promise<string> {
+  if (!text || typeof text !== 'string') return text;
+  
+  // First apply basic compression
+  let compressed = compressText(text, compressionLevel);
+  
+  // Use LangChain text splitter for large texts to find optimal chunks
+  if (compressed.length > 1000) {
+    try {
+      const splitter = new RecursiveCharacterTextSplitter({
+        chunkSize: 500,
+        chunkOverlap: 50,
+        separators: ['\n\n', '\n', '. ', '! ', '? ', '; ', ', ', ' ']
+      });
+      
+      const chunks = await splitter.splitText(compressed);
+      
+      // Merge chunks back but remove redundancies between chunks
+      compressed = chunks
+        .map(chunk => chunk.trim())
+        .filter(chunk => chunk.length > 10) // Remove very short chunks
+        .join(' ')
+        .replace(/\s+/g, ' ');
+    } catch (error) {
+      console.log('Advanced compression failed, using basic compression:', error);
+    }
+  }
+  
+  return compressed;
+}
+
+// Basic text compression using heuristics
 function compressText(text: string, compressionLevel: number = 0.3): string {
   if (!text || typeof text !== 'string') return text;
   
   // Remove extra whitespace
   let compressed = text.replace(/\s+/g, ' ').trim();
   
-  // Remove redundant phrases
+  // Remove redundant phrases with enhanced patterns
   const redundantPhrases = [
     /please\s+/gi,
     /kindly\s+/gi,
@@ -36,7 +71,11 @@ function compressText(text: string, compressionLevel: number = 0.3): string {
     /i\s+would\s+like\s+you\s+to\s+/gi,
     /could\s+you\s+(please\s+)?/gi,
     /\s+and\s+also\s+/gi,
-    /\s+as\s+well\s+as\s+/gi
+    /\s+as\s+well\s+as\s+/gi,
+    /\s+in\s+addition\s+to\s+/gi,
+    /\s+furthermore\s+/gi,
+    /\s+moreover\s+/gi,
+    /\s+additionally\s+/gi
   ];
   
   redundantPhrases.forEach(phrase => {
@@ -50,17 +89,21 @@ function compressText(text: string, compressionLevel: number = 0.3): string {
       .replace(/for\s+the\s+purpose\s+of\s+/gi, 'to ')
       .replace(/with\s+regard\s+to\s+/gi, 'regarding ')
       .replace(/it\s+is\s+important\s+to\s+note\s+that\s+/gi, '')
-      .replace(/please\s+note\s+that\s+/gi, '');
+      .replace(/please\s+note\s+that\s+/gi, '')
+      .replace(/it\s+should\s+be\s+noted\s+that\s+/gi, '')
+      .replace(/one\s+must\s+consider\s+that\s+/gi, '');
   }
   
-  // Aggressive compression (might affect meaning)
+  // Aggressive compression (might affect meaning but saves tokens)
   if (compressionLevel > 0.8) {
     compressed = compressed
       .replace(/\s+the\s+/gi, ' ')
       .replace(/\s+a\s+/gi, ' ')
       .replace(/\s+an\s+/gi, ' ')
       .replace(/\s+is\s+/gi, ' ')
-      .replace(/\s+are\s+/gi, ' ');
+      .replace(/\s+are\s+/gi, ' ')
+      .replace(/\s+will\s+be\s+/gi, ' ')
+      .replace(/\s+can\s+be\s+/gi, ' ');
   }
   
   return compressed.replace(/\s+/g, ' ').trim();
@@ -338,10 +381,15 @@ serve(async (req) => {
       const compressionLevel = optimizationType === 'aggressive' ? 0.8 : 
                               optimizationType === 'conservative' ? 0.3 : 0.5;
       
-      optimizedNodes = optimizedNodes.map(node => {
+      // Process nodes with async compression
+      const compressionPromises = optimizedNodes.map(async (node) => {
         if (node.type === 'prompt-template' && node.data?.template) {
           const originalTemplate = node.data.template;
-          const compressedTemplate = compressText(originalTemplate, compressionLevel);
+          
+          // Use advanced compression for larger templates
+          const compressedTemplate = originalTemplate.length > 500 
+            ? await compressTextAdvanced(originalTemplate, compressionLevel)
+            : compressText(originalTemplate, compressionLevel);
           
           if (compressedTemplate !== originalTemplate) {
             optimizationDetails.push(`Compressed template in ${node.id}: ${originalTemplate.length} → ${compressedTemplate.length} chars`);
@@ -358,6 +406,7 @@ serve(async (req) => {
         return node;
       });
       
+      optimizedNodes = await Promise.all(compressionPromises);
       appliedStrategies.push('text_compression');
     }
 
