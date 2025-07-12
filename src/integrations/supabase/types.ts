@@ -715,6 +715,47 @@ export type Database = {
         }
         Relationships: []
       }
+      rag_analyses: {
+        Row: {
+          analysis_results: Json
+          blueprint_id: string | null
+          created_at: string
+          dataset_filename: string
+          dataset_size: number
+          id: string
+          optimal_config: Json
+          user_id: string
+        }
+        Insert: {
+          analysis_results?: Json
+          blueprint_id?: string | null
+          created_at?: string
+          dataset_filename: string
+          dataset_size: number
+          id?: string
+          optimal_config?: Json
+          user_id: string
+        }
+        Update: {
+          analysis_results?: Json
+          blueprint_id?: string | null
+          created_at?: string
+          dataset_filename?: string
+          dataset_size?: number
+          id?: string
+          optimal_config?: Json
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rag_analyses_blueprint_id_fkey"
+            columns: ["blueprint_id"]
+            isOneToOne: false
+            referencedRelation: "blueprints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rate_limits: {
         Row: {
           blocked_until: string | null

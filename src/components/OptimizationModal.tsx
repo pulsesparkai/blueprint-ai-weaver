@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -19,9 +22,16 @@ import {
   Play,
   Target,
   Database,
-  Gauge
+  Gauge,
+  Upload,
+  FileText,
+  Wand2,
+  Brain,
+  Settings
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { OptimizationReport, OptimizationSuggestion, PipelineOptimizer, NodeConfig, EdgeConfig } from '@/lib/optimizer';
 
 interface OptimizationModalProps {
@@ -31,6 +41,64 @@ interface OptimizationModalProps {
   edges: EdgeConfig[];
   blueprintId: string;
   onApplySuggestion?: (suggestion: OptimizationSuggestion) => void;
+  onApplyRAGConfig?: (config: any) => void;
+}
+
+interface RAGAnalysis {
+  documentStats: {
+    totalDocuments: number;
+    averageLength: number;
+    maxLength: number;
+    minLength: number;
+    vocabulary: string[];
+    documentTypes: string[];
+  };
+  textCharacteristics: {
+    averageSentenceLength: number;
+    complexity: 'simple' | 'medium' | 'complex';
+    domain: 'general' | 'technical' | 'academic' | 'code';
+    language: string;
+  };
+  optimalChunkingStrategy: {
+    chunkSize: number;
+    overlap: number;
+    splitterType: 'recursive' | 'semantic' | 'markdown' | 'code';
+  };
+  embeddingRecommendation: {
+    model: string;
+    dimensions: number;
+    reason: string;
+  };
+  retrievalConfig: {
+    topK: number;
+    searchType: 'similarity' | 'mmr' | 'hybrid';
+    rerankThreshold: number;
+  };
+}
+
+interface OptimalRAGConfig {
+  chunking: {
+    strategy: string;
+    chunkSize: number;
+    overlap: number;
+    preserveStructure: boolean;
+  };
+  embedding: {
+    model: string;
+    dimensions: number;
+    normalization: boolean;
+  };
+  retrieval: {
+    topK: number;
+    searchType: string;
+    mmrLambda?: number;
+    rerankModel?: string;
+  };
+  generation: {
+    contextWindow: number;
+    maxTokens: number;
+    temperature: number;
+  };
 }
 
 export function OptimizationModal({ 
@@ -39,12 +107,44 @@ export function OptimizationModal({
   nodes, 
   edges, 
   blueprintId,
-  onApplySuggestion 
+  onApplySuggestion,
+  onApplyRAGConfig
 }: OptimizationModalProps) {
   const [report, setReport] = useState<OptimizationReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState<OptimizationSuggestion | null>(null);
+  
+  // RAG Auto-Config state
+  const [ragAnalysisLoading, setRagAnalysisLoading] = useState(false);
+  const [ragAnalysis, setRagAnalysis] = useState<RAGAnalysis | null>(null);
+  const [ragConfig, setRagConfig] = useState<OptimalRAGConfig | null>(null);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [userTier, setUserTier] = useState<string>('free');
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
+
+  // Load user tier on component mount
+  React.useEffect(() => {
+    const loadUserTier = async () => {
+      if (!user) return;
+      
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('subscription_tier')
+          .eq('id', user.id)
+          .single();
+        
+        setUserTier(profile?.subscription_tier || 'free');
+      } catch (error) {
+        console.error('Failed to load user tier:', error);
+      }
+    };
+    
+    loadUserTier();
+  }, [user]);
 
   const analyzeOptimizations = async () => {
     setLoading(true);
@@ -69,6 +169,100 @@ export function OptimizationModal({
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Check file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast({
+        title: "File too large",
+        description: "Please upload a file smaller than 10MB",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Check file type
+    const allowedTypes = ['text/plain', 'text/csv', 'application/json', 'text/markdown'];
+    if (!allowedTypes.includes(file.type) && !file.name.endsWith('.txt') && !file.name.endsWith('.md')) {
+      toast({
+        title: "Invalid file type",
+        description: "Please upload a text, CSV, JSON, or Markdown file",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setUploadedFile(file);
+  };
+
+  const analyzeRAGDataset = async () => {
+    if (!uploadedFile || !user) return;
+
+    if (userTier === 'free') {
+      toast({
+        title: "Upgrade Required",
+        description: "Auto-Configure RAG is available for Pro and Enterprise tiers only",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setRagAnalysisLoading(true);
+    
+    try {
+      // Upload file to Supabase Storage
+      const fileName = `${user.id}/${Date.now()}-${uploadedFile.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from('rag-datasets')
+        .upload(fileName, uploadedFile);
+
+      if (uploadError) throw uploadError;
+
+      // Call the RAG analysis Edge Function
+      const { data, error } = await supabase.functions.invoke('rag-auto-config', {
+        body: {
+          filePath: fileName,
+          blueprintId
+        }
+      });
+
+      if (error) throw error;
+
+      setRagAnalysis(data.analysis);
+      setRagConfig(data.optimalConfig);
+
+      toast({
+        title: "Analysis Complete",
+        description: data.recommendations.summary
+      });
+
+      // Clean up uploaded file
+      await supabase.storage.from('rag-datasets').remove([fileName]);
+
+    } catch (error: any) {
+      console.error('RAG analysis error:', error);
+      toast({
+        title: "Analysis Failed",
+        description: error.message || "Failed to analyze dataset",
+        variant: "destructive"
+      });
+    } finally {
+      setRagAnalysisLoading(false);
+    }
+  };
+
+  const applyRAGConfig = () => {
+    if (!ragConfig || !onApplyRAGConfig) return;
+    
+    onApplyRAGConfig(ragConfig);
+    toast({
+      title: "RAG Configuration Applied",
+      description: "Your pipeline has been optimized with the recommended RAG settings"
+    });
   };
 
   const applySuggestion = (suggestion: OptimizationSuggestion) => {
@@ -193,12 +387,13 @@ export function OptimizationModal({
             </div>
           ) : (
             <Tabs defaultValue="overview" className="h-full flex flex-col">
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-5">
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 <TabsTrigger value="suggestions">
                   Suggestions ({report.suggestions.length})
                 </TabsTrigger>
                 <TabsTrigger value="analysis">Node Analysis</TabsTrigger>
+                <TabsTrigger value="rag-config">RAG Auto-Config</TabsTrigger>
                 <TabsTrigger value="implementation">Implementation</TabsTrigger>
               </TabsList>
 
@@ -419,6 +614,240 @@ export function OptimizationModal({
                       );
                     })}
                   </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="rag-config" className="flex-1 min-h-0 overflow-y-auto">
+                <div className="space-y-6">
+                  {/* RAG Auto-Config Header */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Brain className="w-5 h-5" />
+                        Auto-Configure RAG Pipeline
+                        {userTier === 'free' && (
+                          <Badge variant="outline" className="ml-2 text-xs">
+                            Pro/Enterprise Only
+                          </Badge>
+                        )}
+                      </CardTitle>
+                      <CardDescription>
+                        Upload a sample dataset to automatically optimize your RAG configuration based on content analysis
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        {/* File Upload */}
+                        <div>
+                          <Label htmlFor="dataset-upload" className="text-sm font-medium">
+                            Upload Dataset Sample
+                          </Label>
+                          <div className="mt-2">
+                            <Input
+                              ref={fileInputRef}
+                              id="dataset-upload"
+                              type="file"
+                              accept=".txt,.csv,.json,.md"
+                              onChange={handleFileUpload}
+                              disabled={userTier === 'free'}
+                              className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Supported formats: TXT, CSV, JSON, Markdown (max 10MB)
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Upload Status */}
+                        {uploadedFile && (
+                          <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                            <FileText className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-sm font-medium">{uploadedFile.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              ({(uploadedFile.size / 1024).toFixed(1)} KB)
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Analyze Button */}
+                        <Button 
+                          onClick={analyzeRAGDataset}
+                          disabled={!uploadedFile || ragAnalysisLoading || userTier === 'free'}
+                          className="w-full"
+                        >
+                          {ragAnalysisLoading ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-primary-foreground/20 border-t-primary-foreground rounded-full animate-spin mr-2" />
+                              Analyzing Dataset...
+                            </>
+                          ) : (
+                            <>
+                              <Wand2 className="w-4 h-4 mr-2" />
+                              Auto-Configure RAG
+                            </>
+                          )}
+                        </Button>
+
+                        {userTier === 'free' && (
+                          <div className="p-4 bg-muted/50 border border-dashed rounded-lg text-center">
+                            <p className="text-sm text-muted-foreground mb-2">
+                              Auto-Configure RAG is available for Pro and Enterprise users
+                            </p>
+                            <Button variant="outline" size="sm">
+                              Upgrade to Pro
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Analysis Results */}
+                  {ragAnalysis && ragConfig && (
+                    <div className="space-y-4">
+                      {/* Dataset Analysis Summary */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <Database className="w-4 h-4" />
+                            Dataset Analysis
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="text-center">
+                              <div className="text-2xl font-bold text-foreground">
+                                {ragAnalysis.documentStats.totalDocuments}
+                              </div>
+                              <p className="text-xs text-muted-foreground">Documents</p>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-2xl font-bold text-foreground">
+                                {Math.round(ragAnalysis.documentStats.averageLength)}
+                              </div>
+                              <p className="text-xs text-muted-foreground">Avg Length</p>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-2xl font-bold text-foreground capitalize">
+                                {ragAnalysis.textCharacteristics.domain}
+                              </div>
+                              <p className="text-xs text-muted-foreground">Domain</p>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-2xl font-bold text-foreground capitalize">
+                                {ragAnalysis.textCharacteristics.complexity}
+                              </div>
+                              <p className="text-xs text-muted-foreground">Complexity</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Optimal Configuration */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <Settings className="w-4 h-4" />
+                            Recommended Configuration
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-4">
+                            {/* Chunking Strategy */}
+                            <div className="border rounded-lg p-4">
+                              <h4 className="font-medium text-sm mb-2">Chunking Strategy</h4>
+                              <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                  <span className="text-muted-foreground">Strategy:</span>
+                                  <span className="ml-2 font-medium capitalize">{ragConfig.chunking.strategy}</span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Chunk Size:</span>
+                                  <span className="ml-2 font-medium">{ragConfig.chunking.chunkSize} tokens</span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Overlap:</span>
+                                  <span className="ml-2 font-medium">{ragConfig.chunking.overlap} tokens</span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Preserve Structure:</span>
+                                  <span className="ml-2 font-medium">{ragConfig.chunking.preserveStructure ? 'Yes' : 'No'}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Embedding Configuration */}
+                            <div className="border rounded-lg p-4">
+                              <h4 className="font-medium text-sm mb-2">Embedding Configuration</h4>
+                              <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                  <span className="text-muted-foreground">Model:</span>
+                                  <span className="ml-2 font-medium">{ragConfig.embedding.model}</span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Dimensions:</span>
+                                  <span className="ml-2 font-medium">{ragConfig.embedding.dimensions}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Retrieval Configuration */}
+                            <div className="border rounded-lg p-4">
+                              <h4 className="font-medium text-sm mb-2">Retrieval Configuration</h4>
+                              <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                  <span className="text-muted-foreground">Top K:</span>
+                                  <span className="ml-2 font-medium">{ragConfig.retrieval.topK}</span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Search Type:</span>
+                                  <span className="ml-2 font-medium capitalize">{ragConfig.retrieval.searchType}</span>
+                                </div>
+                                {ragConfig.retrieval.mmrLambda && (
+                                  <div>
+                                    <span className="text-muted-foreground">MMR Lambda:</span>
+                                    <span className="ml-2 font-medium">{ragConfig.retrieval.mmrLambda}</span>
+                                  </div>
+                                )}
+                                {ragConfig.retrieval.rerankModel && (
+                                  <div>
+                                    <span className="text-muted-foreground">Rerank Model:</span>
+                                    <span className="ml-2 font-medium">{ragConfig.retrieval.rerankModel}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Generation Configuration */}
+                            <div className="border rounded-lg p-4">
+                              <h4 className="font-medium text-sm mb-2">Generation Configuration</h4>
+                              <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                  <span className="text-muted-foreground">Context Window:</span>
+                                  <span className="ml-2 font-medium">{ragConfig.generation.contextWindow} tokens</span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Max Tokens:</span>
+                                  <span className="ml-2 font-medium">{ragConfig.generation.maxTokens}</span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Temperature:</span>
+                                  <span className="ml-2 font-medium">{ragConfig.generation.temperature}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Apply Configuration */}
+                            <Separator />
+                            <Button onClick={applyRAGConfig} className="w-full" size="lg">
+                              <Target className="w-4 h-4 mr-2" />
+                              Apply Optimal RAG Configuration
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
                 </div>
               </TabsContent>
 
