@@ -52,6 +52,100 @@ export type Database = {
           },
         ]
       }
+      blueprint_shares: {
+        Row: {
+          access_level: string
+          blueprint_id: string
+          created_at: string
+          created_by: string
+          expires_at: string | null
+          id: string
+          share_token: string
+          share_type: string
+          updated_at: string
+        }
+        Insert: {
+          access_level: string
+          blueprint_id: string
+          created_at?: string
+          created_by: string
+          expires_at?: string | null
+          id?: string
+          share_token?: string
+          share_type: string
+          updated_at?: string
+        }
+        Update: {
+          access_level?: string
+          blueprint_id?: string
+          created_at?: string
+          created_by?: string
+          expires_at?: string | null
+          id?: string
+          share_token?: string
+          share_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blueprint_shares_blueprint_id_fkey"
+            columns: ["blueprint_id"]
+            isOneToOne: false
+            referencedRelation: "blueprints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      blueprint_versions: {
+        Row: {
+          blueprint_id: string
+          change_summary: string | null
+          created_at: string
+          created_by: string
+          created_by_email: string
+          description: string | null
+          edges: Json
+          id: string
+          nodes: Json
+          title: string
+          version_number: number
+        }
+        Insert: {
+          blueprint_id: string
+          change_summary?: string | null
+          created_at?: string
+          created_by: string
+          created_by_email: string
+          description?: string | null
+          edges?: Json
+          id?: string
+          nodes?: Json
+          title: string
+          version_number: number
+        }
+        Update: {
+          blueprint_id?: string
+          change_summary?: string | null
+          created_at?: string
+          created_by?: string
+          created_by_email?: string
+          description?: string | null
+          edges?: Json
+          id?: string
+          nodes?: Json
+          title?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blueprint_versions_blueprint_id_fkey"
+            columns: ["blueprint_id"]
+            isOneToOne: false
+            referencedRelation: "blueprints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       blueprints: {
         Row: {
           created_at: string
@@ -95,6 +189,47 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      collaboration_sessions: {
+        Row: {
+          blueprint_id: string
+          cursor_position: Json | null
+          id: string
+          last_seen: string
+          status: string
+          user_email: string
+          user_id: string
+          user_name: string | null
+        }
+        Insert: {
+          blueprint_id: string
+          cursor_position?: Json | null
+          id?: string
+          last_seen?: string
+          status?: string
+          user_email: string
+          user_id: string
+          user_name?: string | null
+        }
+        Update: {
+          blueprint_id?: string
+          cursor_position?: Json | null
+          id?: string
+          last_seen?: string
+          status?: string
+          user_email?: string
+          user_id?: string
+          user_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaboration_sessions_blueprint_id_fkey"
+            columns: ["blueprint_id"]
+            isOneToOne: false
+            referencedRelation: "blueprints"
             referencedColumns: ["id"]
           },
         ]
@@ -306,6 +441,59 @@ export type Database = {
           validation_error?: string | null
         }
         Relationships: []
+      }
+      node_comments: {
+        Row: {
+          blueprint_id: string
+          comment_text: string
+          created_at: string
+          id: string
+          node_id: string
+          resolved: boolean
+          updated_at: string
+          user_email: string
+          user_id: string
+          user_name: string | null
+          x_position: number | null
+          y_position: number | null
+        }
+        Insert: {
+          blueprint_id: string
+          comment_text: string
+          created_at?: string
+          id?: string
+          node_id: string
+          resolved?: boolean
+          updated_at?: string
+          user_email: string
+          user_id: string
+          user_name?: string | null
+          x_position?: number | null
+          y_position?: number | null
+        }
+        Update: {
+          blueprint_id?: string
+          comment_text?: string
+          created_at?: string
+          id?: string
+          node_id?: string
+          resolved?: boolean
+          updated_at?: string
+          user_email?: string
+          user_id?: string
+          user_name?: string | null
+          x_position?: number | null
+          y_position?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "node_comments_blueprint_id_fkey"
+            columns: ["blueprint_id"]
+            isOneToOne: false
+            referencedRelation: "blueprints"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       optimization_history: {
         Row: {
@@ -555,6 +743,80 @@ export type Database = {
           },
         ]
       }
+      team_members: {
+        Row: {
+          email: string
+          id: string
+          invited_at: string
+          invited_by: string
+          joined_at: string | null
+          role: string
+          status: string
+          team_id: string
+          user_id: string
+        }
+        Insert: {
+          email: string
+          id?: string
+          invited_at?: string
+          invited_by: string
+          joined_at?: string | null
+          role: string
+          status?: string
+          team_id: string
+          user_id: string
+        }
+        Update: {
+          email?: string
+          id?: string
+          invited_at?: string
+          invited_by?: string
+          joined_at?: string | null
+          role?: string
+          status?: string
+          team_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_members_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      teams: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          owner_id: string
+          subscription_tier: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          owner_id: string
+          subscription_tier: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          owner_id?: string
+          subscription_tier?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -572,6 +834,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: number
       }
+      cleanup_expired_shares: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
       complete_simulation: {
         Args: { sim_id: string; final_result?: string; error_msg?: string }
         Returns: undefined
@@ -579,6 +845,10 @@ export type Database = {
       test_integration: {
         Args: { integration_id: string }
         Returns: Json
+      }
+      update_collaboration_session: {
+        Args: { p_blueprint_id: string; p_cursor_position?: Json }
+        Returns: undefined
       }
     }
     Enums: {
