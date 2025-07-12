@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronUp, ChevronDown, Play, Settings, Key, Loader2, History, Zap, AlertCircle } from 'lucide-react';
+import { ChevronUp, ChevronDown, Play, Settings, Key, Loader2, History, Zap, AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -48,18 +51,23 @@ interface SimulationResult {
 export function SimulatorPane({ isCollapsed, onToggle, blueprintId }: SimulatorPaneProps) {
   const [isRunning, setIsRunning] = useState(false);
   const [input, setInput] = useState('');
-  const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-20250514');
-  const [apiKey, setApiKey] = useState('');
-  const [mockMode, setMockMode] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState('openai');
+  const [selectedModel, setSelectedModel] = useState('gpt-4o-mini');
+  const [apiKeys, setApiKeys] = useState({
+    openai: '',
+    anthropic: '',
+    xai: '' // Grok
+  });
+  const [useMockMode, setUseMockMode] = useState(false);
   const [currentSimulation, setCurrentSimulation] = useState<SimulationResult | null>(null);
   const [simulationHistory, setSimulationHistory] = useState<any[]>([]);
   const [progress, setProgress] = useState(0);
   const [activeTab, setActiveTab] = useState('test');
+  const [realtimeChannel, setRealtimeChannel] = useState<any>(null);
   
   const { user } = useAuth();
   const { state } = useGraph();
   const { toast } = useToast();
-  const channelRef = useRef<any>(null);
 
   useEffect(() => {
     loadSimulationHistory();
@@ -67,18 +75,17 @@ export function SimulatorPane({ isCollapsed, onToggle, blueprintId }: SimulatorP
     // Set up realtime channel for simulation updates
     if (user && blueprintId) {
       const sessionId = generateSessionId();
-      channelRef.current = supabase.channel(`simulation_${sessionId}`)
-        .on('presence', { event: 'sync' }, () => {
-          console.log('Simulation channel synced');
-        })
-        .on('broadcast', { event: 'simulation_update' }, (payload) => {
+      const channel = supabase.channel(`simulation_${sessionId}`)
+        .on('broadcast', { event: 'simulation_progress' }, (payload) => {
           handleSimulationUpdate(payload);
         })
         .subscribe();
 
+      setRealtimeChannel(channel);
+
       return () => {
-        if (channelRef.current) {
-          supabase.removeChannel(channelRef.current);
+        if (channel) {
+          supabase.removeChannel(channel);
         }
       };
     }
@@ -152,10 +159,28 @@ export function SimulatorPane({ isCollapsed, onToggle, blueprintId }: SimulatorP
   };
 
   const handleRunSimulation = async () => {
-    if (!input.trim() || (!apiKey.trim() && !mockMode) || !blueprintId) {
+    if (!input.trim()) {
       toast({
-        title: "Missing Requirements",
-        description: "Please provide input, API key, and ensure a blueprint is loaded",
+        title: "Input required",
+        description: "Please enter a query to simulate.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!useMockMode && !apiKeys[selectedProvider as keyof typeof apiKeys]?.trim()) {
+      toast({
+        title: "API Key required",
+        description: `Please enter your ${selectedProvider.toUpperCase()} API key or enable mock mode.`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!blueprintId && state.nodes.length === 0) {
+      toast({
+        title: "No pipeline to simulate",
+        description: "Please create a pipeline with nodes first.",
         variant: "destructive"
       });
       return;
@@ -166,12 +191,12 @@ export function SimulatorPane({ isCollapsed, onToggle, blueprintId }: SimulatorP
     setActiveTab('test');
     
     // Initialize simulation state
+    const sessionId = generateSessionId();
     const initialSteps: SimulationStep[] = state.nodes.map(node => ({
       stepName: (node.data?.label || node.type) as string,
       status: 'pending' as const
     }));
     
-    const sessionId = generateSessionId();
     setCurrentSimulation({
       id: sessionId,
       status: 'running',
@@ -185,66 +210,91 @@ export function SimulatorPane({ isCollapsed, onToggle, blueprintId }: SimulatorP
     });
 
     try {
-      // Use the enhanced LangChain blueprint executor
-      const { data, error } = await supabase.functions.invoke('langchain-blueprint-executor', {
-        body: {
-          blueprintId,
-          input,
-          userId: user?.id
-        }
+      const requestBody = {
+        sessionId,
+        input,
+        provider: selectedProvider,
+        model: selectedModel,
+        apiKey: useMockMode ? 'mock-key' : apiKeys[selectedProvider as keyof typeof apiKeys],
+        useMockMode,
+        nodes: state.nodes,
+        edges: state.edges,
+        blueprintId: blueprintId || null
+      };
+
+      // Call the enhanced pipeline simulator
+      const { data, error } = await supabase.functions.invoke('enhanced-pipeline-simulator', {
+        body: requestBody
       });
 
       if (error) throw error;
 
-      const { executionSteps, metrics, output } = data;
-      
-      // Update simulation state with results
-      setCurrentSimulation({
-        id: sessionId,
-        status: 'completed',
-        steps: executionSteps.map((step: any) => ({
-          stepName: step.nodeType,
-          status: step.error ? 'error' : 'completed',
-          output: step.output,
-          metrics: step.tokens ? {
-            tokensInput: step.tokens.input || 0,
-            tokensOutput: step.tokens.output || 0,
-            latencyMs: step.executionTime || 0,
-            costUsd: (step.tokens.total || 0) * 0.00002
-          } : undefined,
-          error: step.error
-        })),
-        finalOutput: output,
-        totalMetrics: {
-          totalTokens: metrics.totalTokens || 0,
-          totalCost: metrics.totalCost || 0,
-          executionTime: metrics.totalTime || 0
-        },
-        contextWindow: []
-      });
-      
-      setIsRunning(false);
-      setProgress(100);
-      setActiveTab('results');
-      
+      // Results will come through realtime updates
       toast({
-        title: "Simulation Completed",
-        description: `Pipeline executed successfully with ${executionSteps.length} steps`,
+        title: "Simulation started",
+        description: "Processing your pipeline..."
       });
-      
-      // Reload history
-      loadSimulationHistory();
-      
+
     } catch (error: any) {
       console.error('Simulation error:', error);
       setIsRunning(false);
       setProgress(0);
       setCurrentSimulation(prev => prev ? { ...prev, status: 'error' } : null);
       toast({
-        title: "Simulation Failed",
-        description: error.message,
+        title: "Simulation failed",
+        description: error.message || "An unexpected error occurred.",
         variant: "destructive"
       });
+    }
+  };
+
+  const handleRefreshSimulation = async () => {
+    if (!currentSimulation) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('simulation_logs')
+        .select('*')
+        .eq('session_id', currentSimulation.id)
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setCurrentSimulation(prev => prev ? {
+          ...prev,
+          status: (data.status === 'completed' || data.status === 'error' || data.status === 'running') 
+            ? data.status as 'running' | 'completed' | 'error' 
+            : 'running',
+          finalOutput: data.final_output || prev.finalOutput,
+          steps: Array.isArray(data.execution_steps) 
+            ? data.execution_steps.map((step: any) => ({
+                stepName: step.stepName || step.nodeType || 'Unknown',
+                status: step.status || 'completed',
+                output: step.output,
+                metrics: step.metrics ? {
+                  tokensInput: step.metrics.input || 0,
+                  tokensOutput: step.metrics.output || 0,
+                  latencyMs: step.executionTime || 0,
+                  costUsd: step.cost || 0
+                } : undefined,
+                error: step.error
+              } as SimulationStep))
+            : prev.steps,
+          totalMetrics: (typeof data.metrics === 'object' && data.metrics && !Array.isArray(data.metrics)) ? {
+            totalTokens: (data.metrics as any).totalTokens || prev.totalMetrics.totalTokens,
+            totalCost: (data.metrics as any).totalCost || prev.totalMetrics.totalCost,
+            executionTime: (data.metrics as any).totalTime || (data.metrics as any).executionTime || prev.totalMetrics.executionTime
+          } : prev.totalMetrics
+        } : null);
+        
+        if (data.status === 'completed') {
+          setIsRunning(false);
+          setProgress(100);
+        }
+      }
+    } catch (error: any) {
+      console.error('Error refreshing simulation:', error);
     }
   };
 
@@ -317,72 +367,131 @@ export function SimulatorPane({ isCollapsed, onToggle, blueprintId }: SimulatorP
             </TabsList>
 
             <TabsContent value="test" className="flex-1 flex flex-col mt-3">
-              {/* Configuration */}
-              <div className="flex gap-3 mb-3">
-                <div className="flex-1">
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                    LLM Model
-                  </label>
+              {/* LLM Configuration */}
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <Label className="text-xs font-medium text-muted-foreground mb-1">
+                    LLM Provider
+                  </Label>
+                  <Select value={selectedProvider} onValueChange={setSelectedProvider}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="openai">OpenAI</SelectItem>
+                      <SelectItem value="anthropic">Anthropic</SelectItem>
+                      <SelectItem value="xai">xAI (Grok)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div>
+                  <Label className="text-xs font-medium text-muted-foreground mb-1">
+                    Model
+                  </Label>
                   <Select value={selectedModel} onValueChange={setSelectedModel}>
                     <SelectTrigger className="h-8 text-xs">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="claude-sonnet-4-20250514">Claude 4 Sonnet</SelectItem>
-                      <SelectItem value="claude-opus-4-20250514">Claude 4 Opus</SelectItem>
-                      <SelectItem value="claude-3-5-haiku-20241022">Claude 3.5 Haiku</SelectItem>
-                      <SelectItem value="gpt-4o">GPT-4o</SelectItem>
-                      <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
+                      {selectedProvider === 'openai' && (
+                        <>
+                          <SelectItem value="gpt-4o">GPT-4o</SelectItem>
+                          <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
+                          <SelectItem value="gpt-4.1-2025-04-14">GPT-4.1</SelectItem>
+                        </>
+                      )}
+                      {selectedProvider === 'anthropic' && (
+                        <>
+                          <SelectItem value="claude-opus-4-20250514">Claude 4 Opus</SelectItem>
+                          <SelectItem value="claude-sonnet-4-20250514">Claude 4 Sonnet</SelectItem>
+                          <SelectItem value="claude-3-5-haiku-20241022">Claude 3.5 Haiku</SelectItem>
+                        </>
+                      )}
+                      {selectedProvider === 'xai' && (
+                        <>
+                          <SelectItem value="grok-beta">Grok Beta</SelectItem>
+                          <SelectItem value="grok-vision-beta">Grok Vision Beta</SelectItem>
+                        </>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
-                
-                <div className="flex-1">
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                    API Key
-                  </label>
-                  <div className="relative">
-                    <Input
-                      type="password"
-                      placeholder="Enter your API key..."
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      className="h-8 text-xs pr-8"
-                    />
-                    <Key className="absolute right-2 top-1.5 h-3 w-3 text-muted-foreground" />
-                  </div>
+              </div>
+
+              {/* API Key Input */}
+              <div className="mb-3">
+                <Label className="text-xs font-medium text-muted-foreground mb-1">
+                  API Key ({selectedProvider.toUpperCase()})
+                </Label>
+                <div className="relative">
+                  <Input
+                    type="password"
+                    placeholder={`Enter your ${selectedProvider.toUpperCase()} API key...`}
+                    value={apiKeys[selectedProvider as keyof typeof apiKeys]}
+                    onChange={(e) => setApiKeys(prev => ({
+                      ...prev,
+                      [selectedProvider]: e.target.value
+                    }))}
+                    className="h-8 text-xs pr-8"
+                    disabled={useMockMode}
+                  />
+                  <Key className="absolute right-2 top-1.5 h-3 w-3 text-muted-foreground" />
                 </div>
+              </div>
+
+              {/* Mock Mode Toggle */}
+              <div className="flex items-center justify-between mb-3">
+                <Label className="text-xs font-medium text-muted-foreground">
+                  Mock Mode (for testing)
+                </Label>
+                <Switch
+                  checked={useMockMode}
+                  onCheckedChange={setUseMockMode}
+                />
               </div>
 
               {/* Input/Run */}
               <div className="flex-1 flex flex-col">
-                <label className="text-xs font-medium text-muted-foreground mb-1">
-                  Test Input
-                </label>
+                <Label className="text-xs font-medium text-muted-foreground mb-1">
+                  Test Query
+                </Label>
                 <Textarea
-                  placeholder="Enter your test prompt here..."
+                  placeholder="Enter your test query here (e.g., 'What is machine learning?')..."
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   className="flex-1 text-xs resize-none"
                 />
-                <Button
-                  onClick={handleRunSimulation}
-                  disabled={isRunning || !input.trim() || !apiKey.trim()}
-                  className="mt-2 h-8"
-                  size="sm"
-                >
-                  {isRunning ? (
-                    <>
-                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                      Running...
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-3 h-3 mr-1" />
-                      Run Simulation
-                    </>
+                <div className="flex gap-2 mt-2">
+                  <Button
+                    onClick={handleRunSimulation}
+                    disabled={isRunning || !input.trim() || (!useMockMode && !apiKeys[selectedProvider as keyof typeof apiKeys]?.trim())}
+                    className="flex-1 h-8"
+                    size="sm"
+                  >
+                    {isRunning ? (
+                      <>
+                        <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                        Running...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-3 h-3 mr-1" />
+                        Run Simulation
+                      </>
+                    )}
+                  </Button>
+                  {currentSimulation && (
+                    <Button
+                      onClick={handleRefreshSimulation}
+                      variant="outline"
+                      size="sm"
+                      className="h-8"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                    </Button>
                   )}
-                </Button>
+                </div>
               </div>
             </TabsContent>
 
