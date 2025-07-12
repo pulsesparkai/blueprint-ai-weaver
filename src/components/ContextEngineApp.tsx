@@ -12,6 +12,7 @@ import { Progress } from '@/components/ui/progress';
 import { Sparkles, Crown, Zap, TrendingUp, Loader2, CheckCircle, AlertCircle, Download, FileCode, Container } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { FeedbackForm } from '@/components/FeedbackForm';
+import { TemplateGallery } from '@/components/TemplateGallery';
 import { useAnalytics } from '@/lib/analytics';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -200,6 +201,18 @@ export function ContextEngineApp({ blueprint }: { blueprint?: any }) {
             </div>
 
             <div className="flex items-center gap-3">
+              <TemplateGallery 
+                onSelectTemplate={(template) => {
+                  // TODO: Implement template loading into canvas
+                  console.log('Loading template:', template);
+                  toast({
+                    title: "Template Loaded",
+                    description: `${template.title} nodes have been added to the canvas.`,
+                  });
+                }}
+                userTier="pro" // TODO: Get actual user tier from context
+              />
+              
               <ThemeToggle />
               
               <FeedbackForm 

@@ -96,6 +96,54 @@ export type Database = {
           },
         ]
       }
+      blueprint_templates: {
+        Row: {
+          category: string
+          created_at: string
+          description: string
+          difficulty: string
+          edges: Json
+          id: string
+          name: string
+          nodes: Json
+          tags: string[] | null
+          thumbnail: string | null
+          tier: string
+          updated_at: string
+          usage_count: number
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          description: string
+          difficulty?: string
+          edges?: Json
+          id?: string
+          name: string
+          nodes?: Json
+          tags?: string[] | null
+          thumbnail?: string | null
+          tier?: string
+          updated_at?: string
+          usage_count?: number
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string
+          difficulty?: string
+          edges?: Json
+          id?: string
+          name?: string
+          nodes?: Json
+          tags?: string[] | null
+          thumbnail?: string | null
+          tier?: string
+          updated_at?: string
+          usage_count?: number
+        }
+        Relationships: []
+      }
       blueprint_versions: {
         Row: {
           blueprint_id: string
