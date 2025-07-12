@@ -9,7 +9,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Menu, Sparkles, User, Crown, Zap, TrendingUp, Loader2, CheckCircle, AlertCircle, Download, FileCode, Container } from 'lucide-react';
+import { Sparkles, Crown, Zap, TrendingUp, Loader2, CheckCircle, AlertCircle, Download, FileCode, Container } from 'lucide-react';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { FeedbackForm } from '@/components/FeedbackForm';
+import { useAnalytics } from '@/lib/analytics';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -22,6 +25,7 @@ export function ContextEngineApp({ blueprint }: { blueprint?: any }) {
   const [optimizationResults, setOptimizationResults] = useState<any>(null);
   const [exporting, setExporting] = useState(false);
   const { toast } = useToast();
+  const { trackBlueprintEvent, trackUserAction } = useAnalytics();
 
   useEffect(() => {
     if (blueprint) {
@@ -128,6 +132,7 @@ export function ContextEngineApp({ blueprint }: { blueprint?: any }) {
       return;
     }
 
+    trackBlueprintEvent('export_started', blueprint.id, { format });
     setExporting(true);
 
     try {
@@ -150,12 +155,16 @@ export function ContextEngineApp({ blueprint }: { blueprint?: any }) {
       link.click();
       document.body.removeChild(link);
 
+      trackBlueprintEvent('export_completed', blueprint.id, { format, filename: data.filename });
+      
       toast({
         title: "Export Complete",
         description: `Blueprint exported as ${format.toUpperCase()}`,
       });
     } catch (error: any) {
       console.error('Export error:', error);
+      trackBlueprintEvent('export_failed', blueprint.id, { format, error: error.message });
+      
       toast({
         title: "Export Failed",
         description: error.message,
@@ -191,6 +200,15 @@ export function ContextEngineApp({ blueprint }: { blueprint?: any }) {
             </div>
 
             <div className="flex items-center gap-3">
+              <ThemeToggle />
+              
+              <FeedbackForm 
+                context={{ 
+                  page: 'editor', 
+                  blueprint_id: blueprint?.id 
+                }}
+              />
+
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button 
@@ -234,15 +252,6 @@ export function ContextEngineApp({ blueprint }: { blueprint?: any }) {
                 <Crown className="w-4 h-4" />
                 <span className="font-medium">Pro Plan</span>
               </div>
-              
-              <Button variant="outline" size="sm">
-                <Menu className="w-4 h-4 mr-2" />
-                Menu
-              </Button>
-              
-              <Button variant="outline" size="sm">
-                <User className="w-4 h-4" />
-              </Button>
             </div>
           </header>
 
