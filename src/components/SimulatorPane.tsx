@@ -50,6 +50,7 @@ export function SimulatorPane({ isCollapsed, onToggle, blueprintId }: SimulatorP
   const [input, setInput] = useState('');
   const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-20250514');
   const [apiKey, setApiKey] = useState('');
+  const [mockMode, setMockMode] = useState(false);
   const [currentSimulation, setCurrentSimulation] = useState<SimulationResult | null>(null);
   const [simulationHistory, setSimulationHistory] = useState<any[]>([]);
   const [progress, setProgress] = useState(0);
@@ -151,7 +152,7 @@ export function SimulatorPane({ isCollapsed, onToggle, blueprintId }: SimulatorP
   };
 
   const handleRunSimulation = async () => {
-    if (!input.trim() || !apiKey.trim() || !blueprintId) {
+    if (!input.trim() || (!apiKey.trim() && !mockMode) || !blueprintId) {
       toast({
         title: "Missing Requirements",
         description: "Please provide input, API key, and ensure a blueprint is loaded",
@@ -188,8 +189,9 @@ export function SimulatorPane({ isCollapsed, onToggle, blueprintId }: SimulatorP
           blueprintId,
           inputQuery: input,
           llmProvider: selectedModel,
-          apiKey,
+          apiKey: mockMode ? 'mock-key' : apiKey,
           sessionId: currentSimulation?.id,
+          mockMode,
           pipelineConfig: {
             nodes: state.nodes,
             edges: state.edges
