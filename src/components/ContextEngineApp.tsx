@@ -122,7 +122,7 @@ export function ContextEngineApp({ blueprint }: { blueprint?: any }) {
     }
   };
 
-  const handleExport = async (format: 'python' | 'docker') => {
+  const handleExport = async (format: 'python' | 'docker' | 'javascript' | 'typescript') => {
     if (!blueprint?.id) {
       toast({
         title: "No Blueprint",
@@ -226,6 +226,14 @@ export function ContextEngineApp({ blueprint }: { blueprint?: any }) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleExport('javascript')}>
+                    <FileCode className="w-4 h-4 mr-2" />
+                    JavaScript
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport('typescript')}>
+                    <FileCode className="w-4 h-4 mr-2" />
+                    TypeScript
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleExport('python')}>
                     <FileCode className="w-4 h-4 mr-2" />
                     Python Script

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import Handlebars from "https://esm.sh/handlebars@4.7.8";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,7 +9,7 @@ const corsHeaders = {
 
 interface ExportRequest {
   blueprintId: string;
-  format: 'python' | 'docker';
+  format: 'python' | 'docker' | 'javascript' | 'typescript';
   includeConfig?: boolean;
   includeRequirements?: boolean;
 }
@@ -413,6 +414,377 @@ if __name__ == "__main__":
 `;
 }
 
+// JavaScript/TypeScript pipeline templates using Handlebars
+const jsTemplateSource = `
+{{#if isTypeScript}}
+// Generated TypeScript LangChain pipeline from ContextForge blueprint
+import { ChatOpenAI } from "@langchain/openai";
+import { PromptTemplate } from "@langchain/core/prompts";
+import { LLMChain } from "langchain/chains";
+import { ConversationBufferMemory } from "langchain/memory";
+import { CheerioWebBaseLoader } from "langchain/document_loaders/web/cheerio";
+import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
+import { OpenAIEmbeddings } from "@langchain/openai";
+import { MemoryVectorStore } from "langchain/vectorstores/memory";
+import * as dotenv from "dotenv";
+
+dotenv.config();
+
+interface PipelineResult {
+  response: string;
+  inputQuery: string;
+  timestamp: string;
+  retrievedDocs?: string[];
+  parsedOutput?: any;
+  error?: string;
+}
+
+interface PipelineConfig {
+  apiKey?: string;
+  temperature?: number;
+  model?: string;
+}
+{{else}}
+// Generated JavaScript LangChain pipeline from ContextForge blueprint
+const { ChatOpenAI } = require("@langchain/openai");
+const { PromptTemplate } = require("@langchain/core/prompts");
+const { LLMChain } = require("langchain/chains");
+const { ConversationBufferMemory } = require("langchain/memory");
+const { CheerioWebBaseLoader } = require("langchain/document_loaders/web/cheerio");
+const { RecursiveCharacterTextSplitter } = require("langchain/text_splitter");
+const { OpenAIEmbeddings } = require("@langchain/openai");
+const { MemoryVectorStore } = require("langchain/vectorstores/memory");
+const dotenv = require("dotenv");
+
+dotenv.config();
+{{/if}}
+
+/**
+ * {{title}} Pipeline
+ * Generated from ContextForge blueprint
+ * Created: {{createdAt}}
+ */
+class {{className}}Pipeline {
+  constructor(config{{#if isTypeScript}}: PipelineConfig{{/if}} = {}) {
+    this.apiKey = config.apiKey || process.env.OPENAI_API_KEY;
+    this.temperature = config.temperature || 0.7;
+    this.model = config.model || "gpt-3.5-turbo";
+    
+    if (!this.apiKey) {
+      throw new Error("OpenAI API key is required");
+    }
+    
+    this.llm = new ChatOpenAI({
+      apiKey: this.apiKey,
+      temperature: this.temperature,
+      model: this.model,
+    });
+    
+    {{#if hasMemory}}
+    this.memory = new ConversationBufferMemory({
+      maxTokenLimit: {{memoryMaxTokens}},
+      returnMessages: true,
+      memoryKey: "chat_history",
+    });
+    {{/if}}
+    
+    {{#if hasRAG}}
+    this.retriever = null;
+    {{/if}}
+    
+    this.setupComplete = false;
+  }
+
+  async setupPipeline() {
+    try {
+      {{#each promptTemplates}}
+      // Prompt Template: {{this.label}}
+      this.{{this.varName}} = new PromptTemplate({
+        inputVariables: [{{#each this.variables}}"{{this}}"{{#unless @last}}, {{/unless}}{{/each}}],
+        template: \`{{this.template}}\`,
+      });
+      {{/each}}
+
+      {{#if hasRAG}}
+      // RAG Retriever setup
+      try {
+        // Note: Update this URL to point to your actual data source
+        const loader = new CheerioWebBaseLoader("{{ragDataSource}}");
+        const docs = await loader.load();
+        
+        const textSplitter = new RecursiveCharacterTextSplitter({
+          chunkSize: {{ragChunkSize}},
+          chunkOverlap: 200,
+        });
+        
+        const splitDocs = await textSplitter.splitDocuments(docs);
+        
+        const embeddings = new OpenAIEmbeddings({
+          apiKey: this.apiKey,
+        });
+        
+        this.vectorStore = await MemoryVectorStore.fromDocuments(
+          splitDocs,
+          embeddings
+        );
+        
+        this.retriever = this.vectorStore.asRetriever({
+          k: {{ragMaxResults}},
+        });
+        
+        console.log("RAG retriever setup completed");
+      } catch (error) {
+        console.warn("Could not setup RAG retriever:", error.message);
+        this.retriever = null;
+      }
+      {{/if}}
+
+      {{#if promptTemplates.length}}
+      // Create main processing chain
+      this.mainChain = new LLMChain({
+        llm: this.llm,
+        prompt: this.{{promptTemplates.0.varName}},
+        {{#if hasMemory}}memory: this.memory,{{/if}}
+        verbose: true,
+      });
+      {{/if}}
+
+      this.setupComplete = true;
+      console.log("Pipeline setup completed successfully");
+    } catch (error) {
+      console.error("Failed to setup pipeline:", error);
+      throw error;
+    }
+  }
+
+  async execute(query{{#if isTypeScript}}: string{{/if}}, context{{#if isTypeScript}}: Record<string, any>{{/if}} = {}){{#if isTypeScript}}: Promise<PipelineResult>{{/if}} {
+    if (!this.setupComplete) {
+      await this.setupPipeline();
+    }
+
+    const executionContext = {
+      query,
+      timestamp: new Date().toISOString(),
+      ...context,
+    };
+
+    try {
+      {{#if hasRAG}}
+      // Retrieve relevant documents
+      if (this.retriever) {
+        const docs = await this.retriever.getRelevantDocuments(query);
+        executionContext.retrievedDocs = docs.map(doc => doc.pageContent);
+        executionContext.documents = executionContext.retrievedDocs.join("\\n");
+      } else {
+        executionContext.documents = "";
+      }
+      {{/if}}
+
+      {{#if promptTemplates.length}}
+      // Execute main chain
+      const response = await this.mainChain.predict(executionContext);
+      
+      const result = {
+        response,
+        inputQuery: query,
+        timestamp: executionContext.timestamp,
+        {{#if hasRAG}}retrievedDocs: executionContext.retrievedDocs || [],{{/if}}
+      };
+      {{else}}
+      const result = {
+        response: "No processing chains configured",
+        inputQuery: query,
+        timestamp: executionContext.timestamp,
+      };
+      {{/if}}
+
+      {{#if hasOutputParser}}
+      // Apply output parsing
+      {{#if (eq outputParserType "json")}}
+      try {
+        const jsonMatch = response.match(/\\{[^}]*\\}/);
+        if (jsonMatch) {
+          result.parsedOutput = JSON.parse(jsonMatch[0]);
+        } else {
+          result.parsedOutput = { content: response };
+        }
+      } catch (error) {
+        result.parsedOutput = { content: response };
+      }
+      {{else}}
+      result.parsedOutput = response; // {{outputParserType}} parsing
+      {{/if}}
+      {{/if}}
+
+      return result;
+    } catch (error) {
+      return {
+        error: error.message,
+        inputQuery: query,
+        timestamp: executionContext.timestamp,
+      };
+    }
+  }
+}
+
+// Example usage
+async function main() {
+  try {
+    const pipeline = new {{className}}Pipeline();
+    await pipeline.setupPipeline();
+    
+    const testQuery = "What is the main topic discussed in the documents?";
+    const result = await pipeline.execute(testQuery);
+    
+    console.log("Pipeline Result:", JSON.stringify(result, null, 2));
+  } catch (error) {
+    console.error("Error:", error);
+  }
+}
+
+{{#if isTypeScript}}
+export { {{className}}Pipeline };
+export type { PipelineResult, PipelineConfig };
+{{else}}
+module.exports = { {{className}}Pipeline };
+{{/if}}
+
+// Run if called directly
+if (require.main === module) {
+  main();
+}
+`;
+
+const packageJsonTemplate = `{
+  "name": "{{packageName}}",
+  "version": "1.0.0",
+  "description": "Generated LangChain pipeline from ContextForge blueprint: {{title}}",
+  "main": "{{#if isTypeScript}}dist/index.js{{else}}index.js{{/if}}",
+  {{#if isTypeScript}}
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node index.ts",
+    "test": "jest"
+  },
+  {{else}}
+  "scripts": {
+    "start": "node index.js",
+    "test": "jest"
+  },
+  {{/if}}
+  "dependencies": {
+    "@langchain/openai": "^0.1.0",
+    "@langchain/core": "^0.2.0",
+    "langchain": "^0.2.0",
+    "dotenv": "^16.0.0"{{#if hasRAG}},
+    "cheerio": "^1.0.0-rc.12"{{/if}}
+  },
+  {{#if isTypeScript}}
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.0",
+    "@types/node": "^20.0.0",
+    "jest": "^29.0.0",
+    "@types/jest": "^29.0.0"
+  },
+  {{/if}}
+  "keywords": ["langchain", "ai", "pipeline", "contextforge"],
+  "author": "ContextForge Generated",
+  "license": "MIT"
+}`;
+
+const dockerfileNodeTemplate = `# Generated Dockerfile for {{title}}
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci --only=production
+
+# Copy application code
+COPY . .
+
+{{#if isTypeScript}}
+# Build TypeScript
+RUN npm run build
+{{/if}}
+
+# Create data directory for documents
+{{#if hasRAG}}
+RUN mkdir -p /app/data
+{{/if}}
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV OPENAI_API_KEY=""
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \\
+    CMD node -e "console.log('Health check passed')" || exit 1
+
+# Run the application
+{{#if isTypeScript}}
+CMD ["node", "dist/index.js"]
+{{else}}
+CMD ["node", "index.js"]
+{{/if}}
+`;
+
+// Generate JavaScript/TypeScript code using templates
+function generateJSCode(blueprint: any, isTypeScript: boolean = false): { code: string, packageJson: string, dockerfile: string } {
+  const { nodes, edges } = blueprint;
+  
+  // Process nodes
+  const promptNodes = nodes.filter((n: any) => n.type === 'prompt-template');
+  const memoryNodes = nodes.filter((n: any) => n.type === 'memory-store');
+  const ragNodes = nodes.filter((n: any) => n.type === 'rag-retriever');
+  const outputNodes = nodes.filter((n: any) => n.type === 'output-parser');
+  
+  const className = blueprint.title.replace(/[^a-zA-Z0-9]/g, '');
+  const packageName = blueprint.title.toLowerCase().replace(/[^a-z0-9]/g, '-');
+  
+  // Prepare template data
+  const templateData = {
+    isTypeScript,
+    title: blueprint.title,
+    className,
+    packageName,
+    createdAt: new Date().toISOString(),
+    hasMemory: memoryNodes.length > 0,
+    hasRAG: ragNodes.length > 0,
+    hasOutputParser: outputNodes.length > 0,
+    memoryMaxTokens: memoryNodes[0]?.data?.maxTokens || 2000,
+    ragDataSource: ragNodes[0]?.data?.dataSource || "https://example.com/your-content",
+    ragChunkSize: ragNodes[0]?.data?.chunkSize || 1000,
+    ragMaxResults: ragNodes[0]?.data?.maxResults || 3,
+    outputParserType: outputNodes[0]?.data?.parserType || 'text',
+    promptTemplates: promptNodes.map((node: any, index: number) => ({
+      label: node.data?.label || 'Unnamed',
+      varName: \`promptTemplate\${index}\`,
+      template: node.data?.template || "Process this input: {input}",
+      variables: node.data?.variables || ['input']
+    }))
+  };
+  
+  // Compile templates
+  const jsTemplate = Handlebars.compile(jsTemplateSource);
+  const packageTemplate = Handlebars.compile(packageJsonTemplate);
+  const dockerTemplate = Handlebars.compile(dockerfileNodeTemplate);
+  
+  return {
+    code: jsTemplate(templateData),
+    packageJson: packageTemplate(templateData),
+    dockerfile: dockerTemplate(templateData)
+  };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -459,6 +831,175 @@ serve(async (req) => {
       fileContent = generatePythonScript(blueprint, { includeConfig, includeRequirements });
       filename = `${safeTitle}_pipeline_${timestamp}.py`;
       mimeType = 'text/x-python';
+    } else if (format === 'javascript') {
+      // Generate JavaScript package
+      const jsFiles = generateJSCode(blueprint, false);
+      
+      fileContent = `# ${blueprint.title} JavaScript Export
+# Generated on ${new Date().toISOString()}
+# Extract each section to separate files
+
+# =============================================================================
+# FILE: package.json
+# =============================================================================
+${jsFiles.packageJson}
+
+# =============================================================================
+# FILE: index.js
+# =============================================================================
+${jsFiles.code}
+
+# =============================================================================
+# FILE: Dockerfile
+# =============================================================================
+${jsFiles.dockerfile}
+
+# =============================================================================
+# FILE: .env.example
+# =============================================================================
+OPENAI_API_KEY=your_openai_api_key_here
+
+# =============================================================================
+# FILE: README.md
+# =============================================================================
+# ${blueprint.title} JavaScript Pipeline
+
+Generated LangChain.js pipeline from ContextForge blueprint.
+
+## Quick Start
+
+1. Extract each file section above to separate files
+2. Install dependencies: \`npm install\`
+3. Copy \`.env.example\` to \`.env\` and add your OpenAI API key
+4. Run: \`npm start\`
+
+## Docker Setup
+
+\`\`\`bash
+docker build -t ${blueprint.title.toLowerCase().replace(/[^a-z0-9]/g, '-')} .
+docker run -e OPENAI_API_KEY="your-key" -p 3000:3000 ${blueprint.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}
+\`\`\`
+
+## Usage
+
+\`\`\`javascript
+const { ${blueprint.title.replace(/[^a-zA-Z0-9]/g, '')}Pipeline } = require('./index.js');
+
+const pipeline = new ${blueprint.title.replace(/[^a-zA-Z0-9]/g, '')}Pipeline();
+const result = await pipeline.execute("Your query here");
+console.log(result);
+\`\`\`
+
+## Notes
+
+- Built with LangChain.js
+- Supports OpenAI models
+- Includes RAG capabilities if configured
+- Memory management for conversations
+`;
+      
+      filename = `${safeTitle}_javascript_${timestamp}.txt`;
+      mimeType = 'text/plain';
+    } else if (format === 'typescript') {
+      // Generate TypeScript package
+      const tsFiles = generateJSCode(blueprint, true);
+      
+      fileContent = `# ${blueprint.title} TypeScript Export
+# Generated on ${new Date().toISOString()}
+# Extract each section to separate files
+
+# =============================================================================
+# FILE: package.json
+# =============================================================================
+${tsFiles.packageJson}
+
+# =============================================================================
+# FILE: index.ts
+# =============================================================================
+${tsFiles.code}
+
+# =============================================================================
+# FILE: Dockerfile
+# =============================================================================
+${tsFiles.dockerfile}
+
+# =============================================================================
+# FILE: tsconfig.json
+# =============================================================================
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "lib": ["ES2020"],
+    "outDir": "./dist",
+    "rootDir": "./",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true
+  },
+  "include": ["*.ts"],
+  "exclude": ["node_modules", "dist"]
+}
+
+# =============================================================================
+# FILE: .env.example
+# =============================================================================
+OPENAI_API_KEY=your_openai_api_key_here
+
+# =============================================================================
+# FILE: README.md
+# =============================================================================
+# ${blueprint.title} TypeScript Pipeline
+
+Generated LangChain.js TypeScript pipeline from ContextForge blueprint.
+
+## Quick Start
+
+1. Extract each file section above to separate files
+2. Install dependencies: \`npm install\`
+3. Copy \`.env.example\` to \`.env\` and add your OpenAI API key
+4. Build: \`npm run build\`
+5. Run: \`npm start\` or for development: \`npm run dev\`
+
+## Docker Setup
+
+\`\`\`bash
+docker build -t ${blueprint.title.toLowerCase().replace(/[^a-z0-9]/g, '-')} .
+docker run -e OPENAI_API_KEY="your-key" -p 3000:3000 ${blueprint.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}
+\`\`\`
+
+## Usage
+
+\`\`\`typescript
+import { ${blueprint.title.replace(/[^a-zA-Z0-9]/g, '')}Pipeline, PipelineConfig } from './index';
+
+const config: PipelineConfig = {
+  apiKey: process.env.OPENAI_API_KEY,
+  temperature: 0.7
+};
+
+const pipeline = new ${blueprint.title.replace(/[^a-zA-Z0-9]/g, '')}Pipeline(config);
+const result = await pipeline.execute("Your query here");
+console.log(result);
+\`\`\`
+
+## Features
+
+- Full TypeScript support with types
+- Built with LangChain.js
+- Supports OpenAI models
+- Includes RAG capabilities if configured
+- Memory management for conversations
+- Production-ready Docker setup
+`;
+      
+      filename = `${safeTitle}_typescript_${timestamp}.txt`;
+      mimeType = 'text/plain';
     } else if (format === 'docker') {
       // Generate Docker setup as a ZIP-like structure
       const pythonScript = generatePythonScript(blueprint, { includeConfig, includeRequirements });
