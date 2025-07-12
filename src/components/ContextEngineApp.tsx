@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ReactFlowProvider } from '@xyflow/react';
 import { NodeSidebar } from './NodeSidebar';
 import { ContextCanvas } from './ContextCanvas';
@@ -6,10 +6,42 @@ import { SimulatorPane } from './SimulatorPane';
 import { GraphProvider } from '@/contexts/GraphContext';
 import { Button } from '@/components/ui/button';
 import { Menu, Sparkles, User, Crown } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 export function ContextEngineApp({ blueprint }: { blueprint?: any }) {
   const [simulatorCollapsed, setSimulatorCollapsed] = useState(false);
   const [addNodeHandler, setAddNodeHandler] = useState<((nodeType: any) => void) | null>(null);
+  const [validationResults, setValidationResults] = useState<any>(null);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (blueprint) {
+      validateBlueprint(blueprint.id);
+    }
+  }, [blueprint]);
+
+  const validateBlueprint = async (blueprintId: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('blueprint-operations', {
+        body: { action: 'get', id: blueprintId }
+      });
+      
+      if (error) throw error;
+      
+      setValidationResults(data.validation);
+      
+      if (data.validation?.errors?.length > 0) {
+        toast({
+          title: "Blueprint Validation",
+          description: `Found ${data.validation.errors.length} errors`,
+          variant: "destructive"
+        });
+      }
+    } catch (error: any) {
+      console.error('Validation error:', error);
+    }
+  };
 
   const handleAddNode = (nodeType: any) => {
     if (addNodeHandler) {
@@ -59,7 +91,7 @@ export function ContextEngineApp({ blueprint }: { blueprint?: any }) {
 
             {/* Canvas Area */}
             <div className="flex-1 flex flex-col">
-              <ContextCanvas onAddNode={setAddNodeHandler} blueprint={blueprint} />
+              <ContextCanvas onAddNode={setAddNodeHandler} blueprint={blueprint} validationResults={validationResults} />
               
               {/* Simulator Pane */}
               <SimulatorPane

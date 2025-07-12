@@ -35,11 +35,12 @@ const nodeTypes = {
 };
 
 interface ContextCanvasProps {
-  onAddNode: (nodeType: any) => void;
+  onAddNode: (handler: (nodeType: any) => void) => void;
   blueprint?: any;
+  validationResults?: any;
 }
 
-export function ContextCanvas({ onAddNode, blueprint }: ContextCanvasProps) {
+export function ContextCanvas({ onAddNode, blueprint, validationResults }: ContextCanvasProps) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { state, dispatch, validateConnection, validateGraph, exportGraph } = useGraph();
   const [nodes, setNodes, onNodesChange] = useNodesState(state.nodes);

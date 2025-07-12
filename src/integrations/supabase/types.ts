@@ -14,6 +14,44 @@ export type Database = {
   }
   public: {
     Tables: {
+      blueprint_sessions: {
+        Row: {
+          blueprint_id: string
+          created_at: string
+          expires_at: string
+          id: string
+          session_data: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          blueprint_id: string
+          created_at?: string
+          expires_at: string
+          id?: string
+          session_data?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          blueprint_id?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          session_data?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blueprint_sessions_blueprint_id_fkey"
+            columns: ["blueprint_id"]
+            isOneToOne: false
+            referencedRelation: "blueprints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       blueprints: {
         Row: {
           created_at: string
@@ -61,6 +99,44 @@ export type Database = {
           },
         ]
       }
+      execution_logs: {
+        Row: {
+          blueprint_id: string
+          executed_at: string
+          execution_results: Json
+          id: string
+          input_data: Json
+          session_id: string | null
+          user_id: string
+        }
+        Insert: {
+          blueprint_id: string
+          executed_at?: string
+          execution_results?: Json
+          id?: string
+          input_data?: Json
+          session_id?: string | null
+          user_id: string
+        }
+        Update: {
+          blueprint_id?: string
+          executed_at?: string
+          execution_results?: Json
+          id?: string
+          input_data?: Json
+          session_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "execution_logs_blueprint_id_fkey"
+            columns: ["blueprint_id"]
+            isOneToOne: false
+            referencedRelation: "blueprints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -99,7 +175,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      cleanup_expired_sessions: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
     }
     Enums: {
       [_ in never]: never
