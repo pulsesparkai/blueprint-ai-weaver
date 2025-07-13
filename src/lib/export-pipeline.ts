@@ -2,11 +2,27 @@ import JSZip from 'jszip';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface ExportConfig {
-  format: 'python' | 'jupyter' | 'docker-compose';
+  format: 'python' | 'typescript' | 'javascript' | 'jupyter' | 'docker-compose' | 'kubernetes' | 'api';
   includeDockerfile: boolean;
   includeReadme: boolean;
-  pythonVersion: '3.8' | '3.9' | '3.10' | '3.11';
-  packageManager: 'pip' | 'poetry' | 'conda';
+  includeTests: boolean;
+  includeDocs: boolean;
+  includeMonitoring: boolean;
+  pythonVersion: '3.8' | '3.9' | '3.10' | '3.11' | '3.12';
+  nodeVersion: '18' | '20' | '21';
+  packageManager: 'pip' | 'poetry' | 'conda' | 'npm' | 'yarn' | 'pnpm';
+  deployment: {
+    platform: 'vercel' | 'netlify' | 'railway' | 'render' | 'aws-lambda' | 'gcp-run' | 'azure-functions' | 'local';
+    environment: 'development' | 'staging' | 'production';
+    autoScale: boolean;
+    monitoring: boolean;
+  };
+  optimization: {
+    caching: boolean;
+    batching: boolean;
+    streaming: boolean;
+    fallbacks: boolean;
+  };
 }
 
 export interface NodeConfig {
@@ -58,19 +74,43 @@ export class PipelineExporter {
     // Generate main pipeline code
     switch (this.config.format) {
       case 'python':
-        zip.file('pipeline.py', this.generatePythonScript());
+        zip.file('main.py', this.generatePythonScript());
+        break;
+      case 'typescript':
+        zip.file('src/index.ts', this.generateTypeScriptCode());
+        zip.file('package.json', this.generatePackageJson());
+        zip.file('tsconfig.json', this.generateTsConfig());
+        break;
+      case 'javascript':
+        zip.file('src/index.js', this.generateJavaScriptCode());
+        zip.file('package.json', this.generatePackageJson());
         break;
       case 'jupyter':
         zip.file('pipeline.ipynb', this.generateJupyterNotebook());
         break;
       case 'docker-compose':
-        zip.file('pipeline.py', this.generatePythonScript());
+        zip.file('src/main.py', this.generatePythonScript());
         zip.file('docker-compose.yml', this.generateDockerCompose());
+        break;
+      case 'kubernetes':
+        zip.file('src/main.py', this.generatePythonScript());
+        zip.file('k8s/deployment.yaml', this.generateKubernetesManifests());
+        zip.file('k8s/service.yaml', this.generateKubernetesService());
+        zip.file('k8s/configmap.yaml', this.generateKubernetesConfigMap());
+        break;
+      case 'api':
+        zip.file('src/api.py', this.generateAPIServer());
+        zip.file('src/main.py', this.generatePythonScript());
         break;
     }
 
-    // Add supporting files
-    zip.file('requirements.txt', this.generateRequirements());
+    // Add supporting files based on format
+    if (['python', 'jupyter', 'docker-compose', 'kubernetes', 'api'].includes(this.config.format)) {
+      zip.file('requirements.txt', this.generateRequirements());
+    } else if (['typescript', 'javascript'].includes(this.config.format)) {
+      zip.file('.gitignore', this.generateGitignore());
+      zip.file('.eslintrc.json', this.generateESLintConfig());
+    }
     
     if (this.config.includeDockerfile) {
       zip.file('Dockerfile', this.generateDockerfile());
@@ -80,9 +120,60 @@ export class PipelineExporter {
       zip.file('README.md', this.generateReadme());
     }
 
+    if (this.config.includeTests) {
+      zip.file('tests/', '');
+      if (['python', 'api'].includes(this.config.format)) {
+        zip.file('tests/test_pipeline.py', this.generatePythonTests());
+        zip.file('pytest.ini', this.generatePytestConfig());
+      } else if (['typescript', 'javascript'].includes(this.config.format)) {
+        zip.file('tests/pipeline.test.ts', this.generateJSTests());
+        zip.file('jest.config.js', this.generateJestConfig());
+      }
+    }
+
+    if (this.config.includeDocs) {
+      zip.file('docs/API.md', this.generateAPIDocumentation());
+      zip.file('docs/DEPLOYMENT.md', this.generateDeploymentGuide());
+      zip.file('docs/TROUBLESHOOTING.md', this.generateTroubleshootingGuide());
+    }
+
+    if (this.config.includeMonitoring) {
+      zip.file('monitoring/health.py', this.generateHealthCheck());
+      zip.file('monitoring/metrics.py', this.generateMetrics());
+      zip.file('docker-compose.monitoring.yml', this.generateMonitoringCompose());
+    }
+
+    // Add deployment configurations
+    zip.file('deployment/', '');
+    switch (this.config.deployment.platform) {
+      case 'vercel':
+        zip.file('vercel.json', this.generateVercelConfig());
+        zip.file('api/index.js', this.generateVercelAPI());
+        break;
+      case 'netlify':
+        zip.file('netlify.toml', this.generateNetlifyConfig());
+        zip.file('functions/pipeline.js', this.generateNetlifyFunction());
+        break;
+      case 'railway':
+        zip.file('railway.toml', this.generateRailwayConfig());
+        break;
+      case 'render':
+        zip.file('render.yaml', this.generateRenderConfig());
+        break;
+      case 'aws-lambda':
+        zip.file('serverless.yml', this.generateServerlessConfig());
+        zip.file('lambda_function.py', this.generateLambdaFunction());
+        break;
+      case 'gcp-run':
+        zip.file('cloudbuild.yaml', this.generateCloudBuildConfig());
+        zip.file('service.yaml', this.generateCloudRunService());
+        break;
+    }
+
     // Add configuration files
     zip.file('config.json', this.generateConfigFile());
     zip.file('.env.example', this.generateEnvExample());
+    zip.file('.env.production.example', this.generateProductionEnv());
 
     // Log the export
     await this.logExport();
@@ -800,6 +891,1259 @@ Generated by Context Engine on ${new Date().toISOString()}
   private generateFlowDiagram(): string {
     const nodes = this.pipeline.nodes.map(node => node.id).join(' -> ');
     return nodes || 'No nodes defined';
+  }
+
+  // TypeScript/JavaScript generation methods
+  private generateTypeScriptCode(): string {
+    return this.generateJSCode(true);
+  }
+
+  private generateJavaScriptCode(): string {
+    return this.generateJSCode(false);
+  }
+
+  private generateJSCode(isTypeScript: boolean): string {
+    const className = this.pipeline.title.replace(/[^a-zA-Z0-9]/g, '');
+    const hasLLM = this.pipeline.nodes.some(n => ['PromptTemplateNode', 'LLMNode'].includes(n.type));
+    const hasRAG = this.pipeline.nodes.some(n => n.type === 'RAGRetrieverNode');
+
+    return `${isTypeScript ? '// TypeScript' : '// JavaScript'} Pipeline
+${isTypeScript ? 'import' : 'const'} ${isTypeScript ? '{ OpenAI }' : '{ OpenAI }'} ${isTypeScript ? 'from' : '='} ${isTypeScript ? '"openai"' : 'require("openai")'};
+${hasRAG ? `${isTypeScript ? 'import' : 'const'} ${isTypeScript ? '{ Pinecone }' : '{ Pinecone }'} ${isTypeScript ? 'from' : '='} ${isTypeScript ? '"@pinecone-database/pinecone"' : 'require("@pinecone-database/pinecone")'};` : ''}
+
+${isTypeScript ? `interface PipelineConfig {
+  openaiApiKey?: string;
+  temperature?: number;
+  maxTokens?: number;
+}
+
+interface ExecutionResult {
+  success: boolean;
+  data?: any;
+  error?: string;
+}` : ''}
+
+class ${className}Pipeline {
+  ${isTypeScript ? 'private openai: OpenAI;' : ''}
+  ${hasRAG ? `${isTypeScript ? 'private pinecone: Pinecone;' : ''}` : ''}
+
+  constructor(config${isTypeScript ? ': PipelineConfig' : ''} = {}) {
+    this.openai = new OpenAI({
+      apiKey: config.openaiApiKey || process.env.OPENAI_API_KEY
+    });
+    ${hasRAG ? 'this.pinecone = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });' : ''}
+  }
+
+  async execute(input${isTypeScript ? ': string' : ''})${isTypeScript ? ': Promise<ExecutionResult>' : ''} {
+    try {
+      ${hasLLM ? `const response = await this.openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: input }],
+        temperature: 0.7,
+        max_tokens: 1000
+      });
+      
+      return {
+        success: true,
+        data: response.choices[0].message.content
+      };` : `return { success: true, data: input };`}
+    } catch (error) {
+      return {
+        success: false,
+        error: error${isTypeScript ? '' : '.message'}
+      };
+    }
+  }
+}
+
+${isTypeScript ? 'export default' : 'module.exports ='} ${className}Pipeline;`;
+  }
+
+  private generatePackageJson(): string {
+    const packageName = this.pipeline.title.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    const isTypeScript = this.config.format === 'typescript';
+    
+    return JSON.stringify({
+      name: packageName,
+      version: "1.0.0",
+      description: this.pipeline.description || "Generated pipeline",
+      main: isTypeScript ? "dist/index.js" : "src/index.js",
+      scripts: {
+        ...(isTypeScript ? {
+          "build": "tsc",
+          "start": "node dist/index.js",
+          "dev": "ts-node src/index.ts"
+        } : {
+          "start": "node src/index.js"
+        }),
+        "test": "jest"
+      },
+      dependencies: {
+        "openai": "^4.0.0",
+        "dotenv": "^16.0.0",
+        ...(this.pipeline.nodes.some(n => n.type === 'RAGRetrieverNode') ? {
+          "@pinecone-database/pinecone": "^1.0.0"
+        } : {})
+      },
+      ...(isTypeScript ? {
+        devDependencies: {
+          "typescript": "^5.0.0",
+          "ts-node": "^10.9.0",
+          "@types/node": "^20.0.0",
+          "jest": "^29.0.0",
+          "@types/jest": "^29.0.0"
+        }
+      } : {})
+    }, null, 2);
+  }
+
+  private generateTsConfig(): string {
+    return JSON.stringify({
+      compilerOptions: {
+        target: "ES2020",
+        module: "commonjs",
+        lib: ["ES2020"],
+        outDir: "./dist",
+        rootDir: "./src",
+        strict: true,
+        esModuleInterop: true,
+        skipLibCheck: true,
+        forceConsistentCasingInFileNames: true,
+        resolveJsonModule: true
+      },
+      include: ["src/**/*"],
+      exclude: ["node_modules", "dist", "tests"]
+    }, null, 2);
+  }
+
+  private generateGitignore(): string {
+    return `node_modules/
+dist/
+.env
+.env.local
+*.log
+.DS_Store
+coverage/
+.nyc_output
+.vscode/
+.idea/`;
+  }
+
+  private generateESLintConfig(): string {
+    return JSON.stringify({
+      env: {
+        node: true,
+        es2021: true
+      },
+      extends: [
+        "eslint:recommended",
+        ...(this.config.format === 'typescript' ? ["@typescript-eslint/recommended"] : [])
+      ],
+      parser: this.config.format === 'typescript' ? "@typescript-eslint/parser" : "babel-parser",
+      parserOptions: {
+        ecmaVersion: 12,
+        sourceType: "module"
+      },
+      rules: {
+        "no-console": "warn",
+        "no-unused-vars": "error"
+      }
+    }, null, 2);
+  }
+
+  // Kubernetes methods
+  private generateKubernetesManifests(): string {
+    const appName = this.pipeline.title.toLowerCase().replace(/\s+/g, '-');
+    return `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${appName}-deployment
+  labels:
+    app: ${appName}
+spec:
+  replicas: ${this.config.deployment.autoScale ? 3 : 1}
+  selector:
+    matchLabels:
+      app: ${appName}
+  template:
+    metadata:
+      labels:
+        app: ${appName}
+    spec:
+      containers:
+      - name: ${appName}
+        image: ${appName}:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ${appName}-secrets
+              key: openai-api-key
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5`;
+  }
+
+  private generateKubernetesService(): string {
+    const appName = this.pipeline.title.toLowerCase().replace(/\s+/g, '-');
+    return `apiVersion: v1
+kind: Service
+metadata:
+  name: ${appName}-service
+spec:
+  selector:
+    app: ${appName}
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
+  type: LoadBalancer`;
+  }
+
+  private generateKubernetesConfigMap(): string {
+    const appName = this.pipeline.title.toLowerCase().replace(/\s+/g, '-');
+    return `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ${appName}-config
+data:
+  PIPELINE_NAME: "${this.pipeline.title}"
+  PIPELINE_VERSION: "1.0.0"
+  LOG_LEVEL: "INFO"`;
+  }
+
+  // API Server generation
+  private generateAPIServer(): string {
+    return `#!/usr/bin/env python3
+"""
+FastAPI server for ${this.pipeline.title}
+"""
+
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import Dict, Any
+import uvicorn
+import logging
+from main import Pipeline
+
+app = FastAPI(title="${this.pipeline.title} API", version="1.0.0")
+pipeline = Pipeline()
+
+class PipelineRequest(BaseModel):
+    input_data: Dict[str, Any]
+
+class PipelineResponse(BaseModel):
+    success: bool
+    results: Dict[str, Any] = None
+    error: str = None
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "pipeline": "${this.pipeline.title}"}
+
+@app.post("/execute", response_model=PipelineResponse)
+async def execute_pipeline(request: PipelineRequest):
+    try:
+        results = await pipeline.execute(request.input_data)
+        return PipelineResponse(success=True, results=results)
+    except Exception as e:
+        logging.error(f"Pipeline execution failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/pipeline/info")
+async def get_pipeline_info():
+    return {
+        "title": "${this.pipeline.title}",
+        "description": "${this.pipeline.description || ''}",
+        "nodes": len(pipeline.nodes),
+        "edges": len(pipeline.edges)
+    }
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)`;
+  }
+
+  // Test generation methods
+  private generatePythonTests(): string {
+    return `#!/usr/bin/env python3
+"""
+Unit tests for ${this.pipeline.title} pipeline
+"""
+
+import pytest
+import asyncio
+from main import Pipeline
+
+class TestPipeline:
+    def setup_method(self):
+        self.pipeline = Pipeline()
+    
+    @pytest.mark.asyncio
+    async def test_pipeline_initialization(self):
+        assert self.pipeline is not None
+        assert len(self.pipeline.nodes) > 0
+    
+    @pytest.mark.asyncio
+    async def test_pipeline_execution(self):
+        test_input = {
+            "query": "test query",
+            "context": "test context"
+        }
+        
+        results = await self.pipeline.execute(test_input)
+        
+        assert "input" in results
+        assert results["input"] == test_input
+    
+    def test_execution_order(self):
+        order = self.pipeline.get_execution_order()
+        assert isinstance(order, list)
+        assert len(order) == len(self.pipeline.nodes)
+    
+    def test_node_input_generation(self):
+        # Test with empty results
+        node_input = self.pipeline.get_node_input("test_node", {"input": {"test": "data"}})
+        assert isinstance(node_input, dict)`;
+  }
+
+  private generatePytestConfig(): string {
+    return `[tool:pytest]
+testpaths = tests
+python_files = test_*.py
+python_classes = Test*
+python_functions = test_*
+addopts = -v --tb=short
+markers =
+    integration: marks tests as integration tests
+    unit: marks tests as unit tests`;
+  }
+
+  private generateJSTests(): string {
+    const className = this.pipeline.title.replace(/[^a-zA-Z0-9]/g, '');
+    const isTypeScript = this.config.format === 'typescript';
+    
+    return `${isTypeScript ? 'import' : 'const'} ${className}Pipeline ${isTypeScript ? 'from' : '='} ${isTypeScript ? '"../src/index"' : 'require("../src/index")'};
+
+describe('${className}Pipeline', () => {
+  let pipeline${isTypeScript ? ': ' + className + 'Pipeline' : ''};
+
+  beforeEach(() => {
+    pipeline = new ${className}Pipeline({
+      openaiApiKey: 'test-key'
+    });
+  });
+
+  test('should initialize correctly', () => {
+    expect(pipeline).toBeInstanceOf(${className}Pipeline);
+  });
+
+  test('should execute with valid input', async () => {
+    const result = await pipeline.execute('test input');
+    
+    expect(result).toHaveProperty('success');
+    expect(typeof result.success).toBe('boolean');
+  });
+
+  test('should handle errors gracefully', async () => {
+    const pipelineWithoutKey = new ${className}Pipeline();
+    const result = await pipelineWithoutKey.execute('test');
+    
+    expect(result.success).toBe(false);
+    expect(result).toHaveProperty('error');
+  });
+});`;
+  }
+
+  private generateJestConfig(): string {
+    const isTypeScript = this.config.format === 'typescript';
+    
+    return `module.exports = {
+  preset: ${isTypeScript ? '"ts-jest"' : 'undefined'},
+  testEnvironment: 'node',
+  ${isTypeScript ? 'roots: ["<rootDir>/src", "<rootDir>/tests"],' : ''}
+  testMatch: [
+    '**/tests/**/*.test.${isTypeScript ? 'ts' : 'js'}'
+  ],
+  ${isTypeScript ? `transform: {
+    '^.+\\.ts$': 'ts-jest'
+  },` : ''}
+  collectCoverageFrom: [
+    'src/**/*.${isTypeScript ? 'ts' : 'js'}',
+    '!src/**/*.d.ts'
+  ],
+  coverageDirectory: 'coverage',
+  coverageReporters: ['text', 'lcov', 'html']
+};`;
+  }
+
+  // Documentation generation methods
+  private generateAPIDocumentation(): string {
+    return `# ${this.pipeline.title} API Documentation
+
+## Overview
+
+This API provides access to the ${this.pipeline.title} pipeline functionality.
+
+## Base URL
+
+\`\`\`
+${this.config.deployment.environment === 'production' ? 'https://your-domain.com' : 'http://localhost:8000'}
+\`\`\`
+
+## Endpoints
+
+### Execute Pipeline
+
+\`POST /execute\`
+
+Execute the pipeline with provided input data.
+
+**Request Body:**
+\`\`\`json
+{
+  "input_data": {
+    "query": "string",
+    "context": "string (optional)"
+  }
+}
+\`\`\`
+
+**Response:**
+\`\`\`json
+{
+  "success": true,
+  "results": {
+    "input": {},
+    "node_id": "result_data"
+  }
+}
+\`\`\`
+
+### Health Check
+
+\`GET /health\`
+
+Check the health status of the API.
+
+**Response:**
+\`\`\`json
+{
+  "status": "healthy",
+  "pipeline": "${this.pipeline.title}"
+}
+\`\`\`
+
+### Pipeline Information
+
+\`GET /pipeline/info\`
+
+Get information about the pipeline configuration.
+
+**Response:**
+\`\`\`json
+{
+  "title": "${this.pipeline.title}",
+  "description": "Pipeline description",
+  "nodes": 5,
+  "edges": 4
+}
+\`\`\`
+
+## Error Handling
+
+All endpoints return appropriate HTTP status codes:
+
+- \`200\`: Success
+- \`400\`: Bad Request
+- \`500\`: Internal Server Error
+
+Error responses include details:
+
+\`\`\`json
+{
+  "success": false,
+  "error": "Error description"
+}
+\`\`\`
+
+## Rate Limiting
+
+API requests are limited to prevent abuse. Current limits:
+
+- 100 requests per minute per IP
+- 1000 requests per hour per API key
+
+## Authentication
+
+Set your API key in the request headers:
+
+\`\`\`
+Authorization: Bearer your-api-key
+\`\`\``;
+  }
+
+  private generateDeploymentGuide(): string {
+    return `# Deployment Guide for ${this.pipeline.title}
+
+## Overview
+
+This guide covers deploying your pipeline to various platforms.
+
+## Platform-Specific Instructions
+
+### ${this.config.deployment.platform.toUpperCase()}
+
+${this.generatePlatformInstructions()}
+
+## Environment Variables
+
+Configure these environment variables for your deployment:
+
+${this.getRequiredEnvVars().map(env => `- \`${env}\`: ${this.getEnvDescription(env)}`).join('\n')}
+
+## Health Checks
+
+The application includes health check endpoints:
+
+- \`/health\`: Basic health status
+- \`/ready\`: Readiness probe for Kubernetes
+
+## Monitoring
+
+${this.config.includeMonitoring ? `
+Monitoring is configured with:
+
+- Health checks every 30 seconds
+- Performance metrics collection
+- Error rate tracking
+- Response time monitoring
+
+Access metrics at \`/metrics\` endpoint.
+` : 'Enable monitoring in export configuration for detailed metrics.'}
+
+## Scaling
+
+${this.config.deployment.autoScale ? `
+Auto-scaling is configured:
+
+- Minimum replicas: 1
+- Maximum replicas: 10
+- CPU threshold: 70%
+- Memory threshold: 80%
+` : 'Auto-scaling is disabled. Manually scale as needed.'}
+
+## Security
+
+- API keys stored as secrets
+- HTTPS enforced in production
+- Rate limiting enabled
+- Input validation on all endpoints
+
+## Troubleshooting
+
+Common deployment issues:
+
+1. **API Key Issues**: Verify all environment variables are set
+2. **Memory Limits**: Increase if pipeline uses large models
+3. **Timeout Errors**: Adjust request timeout for complex pipelines
+4. **Network Issues**: Check firewall and security group settings`;
+  }
+
+  private generateTroubleshootingGuide(): string {
+    return `# Troubleshooting Guide for ${this.pipeline.title}
+
+## Common Issues
+
+### 1. API Key Errors
+
+**Symptom**: \`Authentication failed\` or \`Invalid API key\`
+
+**Solutions**:
+- Verify API keys are correctly set in environment variables
+- Check that keys have sufficient permissions
+- Ensure no extra spaces or characters in key values
+
+### 2. Memory Issues
+
+**Symptom**: \`Out of memory\` or container restarts
+
+**Solutions**:
+- Increase memory limits in deployment configuration
+- Consider using smaller models for development
+- Implement caching to reduce memory usage
+
+### 3. Timeout Errors
+
+**Symptom**: Requests timing out or hanging
+
+**Solutions**:
+- Increase request timeout settings
+- Optimize prompts to reduce processing time
+- Check network connectivity to external APIs
+
+### 4. Performance Issues
+
+**Symptom**: Slow response times
+
+**Solutions**:
+- Enable caching for repeated queries
+- Use parallel processing where possible
+- Consider using faster models for non-critical paths
+
+## Debugging
+
+### Enable Debug Logging
+
+\`\`\`python
+import logging
+logging.basicConfig(level=logging.DEBUG)
+\`\`\`
+
+### Check Pipeline Status
+
+\`\`\`bash
+# Health check
+curl http://localhost:8000/health
+
+# Pipeline info
+curl http://localhost:8000/pipeline/info
+\`\`\`
+
+### Monitor Resource Usage
+
+\`\`\`bash
+# Docker stats
+docker stats
+
+# Kubernetes pods
+kubectl top pods
+\`\`\`
+
+## Error Codes
+
+- \`1001\`: Missing API key
+- \`1002\`: Invalid model configuration
+- \`1003\`: Network connectivity issue
+- \`1004\`: Rate limit exceeded
+- \`1005\`: Invalid input format
+
+## Getting Help
+
+1. Check the logs for detailed error messages
+2. Verify all dependencies are installed
+3. Test individual components separately
+4. Contact support with error details and configuration`;
+  }
+
+  // Deployment platform methods
+  private generatePlatformInstructions(): string {
+    switch (this.config.deployment.platform) {
+      case 'vercel':
+        return `
+1. Install Vercel CLI: \`npm i -g vercel\`
+2. Configure API routes in \`api/\` directory
+3. Deploy: \`vercel --prod\`
+4. Set environment variables in Vercel dashboard`;
+
+      case 'railway':
+        return `
+1. Connect your GitHub repository to Railway
+2. Configure environment variables
+3. Deploy automatically on push to main branch`;
+
+      case 'aws-lambda':
+        return `
+1. Install Serverless Framework: \`npm i -g serverless\`
+2. Configure AWS credentials
+3. Deploy: \`serverless deploy\`
+4. Monitor via CloudWatch`;
+
+      default:
+        return 'Follow platform-specific deployment instructions.';
+    }
+  }
+
+  private generateVercelConfig(): string {
+    return JSON.stringify({
+      version: 2,
+      builds: [
+        {
+          src: "api/index.js",
+          use: "@vercel/node"
+        }
+      ],
+      routes: [
+        {
+          src: "/api/(.*)",
+          dest: "/api/index.js"
+        }
+      ],
+      env: this.getRequiredEnvVars().reduce((acc, key) => {
+        acc[key] = `@${key.toLowerCase()}`;
+        return acc;
+      }, {} as Record<string, string>)
+    }, null, 2);
+  }
+
+  private generateVercelAPI(): string {
+    const className = this.pipeline.title.replace(/[^a-zA-Z0-9]/g, '');
+    return `const ${className}Pipeline = require('../src/index');
+
+const pipeline = new ${className}Pipeline();
+
+module.exports = async (req, res) => {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    const { input } = req.body;
+    const result = await pipeline.execute(input);
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};`;
+  }
+
+  private generateNetlifyConfig(): string {
+    return `[build]
+  command = "npm run build"
+  functions = "functions"
+  publish = "dist"
+
+[functions]
+  node_bundler = "esbuild"
+
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, POST, OPTIONS"
+    Access-Control-Allow-Headers = "Content-Type"`;
+  }
+
+  private generateNetlifyFunction(): string {
+    const className = this.pipeline.title.replace(/[^a-zA-Z0-9]/g, '');
+    return `const ${className}Pipeline = require('../src/index');
+
+const pipeline = new ${className}Pipeline();
+
+exports.handler = async (event, context) => {
+  if (event.httpMethod !== 'POST') {
+    return {
+      statusCode: 405,
+      body: JSON.stringify({ error: 'Method not allowed' })
+    };
+  }
+
+  try {
+    const { input } = JSON.parse(event.body);
+    const result = await pipeline.execute(input);
+    
+    return {
+      statusCode: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      },
+      body: JSON.stringify(result)
+    };
+  } catch (error) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: error.message })
+    };
+  }
+};`;
+  }
+
+  private generateRailwayConfig(): string {
+    return `[build]
+cmd = "npm install && npm run build"
+
+[deploy]
+startCommand = "npm start"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10`;
+  }
+
+  private generateRenderConfig(): string {
+    return `services:
+  - type: web
+    name: ${this.pipeline.title.toLowerCase().replace(/\s+/g, '-')}
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+${this.getRequiredEnvVars().map(env => `      - key: ${env}
+        sync: false`).join('\n')}`;
+  }
+
+  private generateServerlessConfig(): string {
+    return `service: ${this.pipeline.title.toLowerCase().replace(/\s+/g, '-')}
+
+provider:
+  name: aws
+  runtime: python${this.config.pythonVersion}
+  region: us-east-1
+  timeout: 30
+  memorySize: 512
+  environment:
+${this.getRequiredEnvVars().map(env => `    ${env}: \${env:${env}}`).join('\n')}
+
+functions:
+  pipeline:
+    handler: lambda_function.lambda_handler
+    events:
+      - http:
+          path: execute
+          method: post
+          cors: true
+  
+  health:
+    handler: lambda_function.health_check
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+plugins:
+  - serverless-python-requirements
+
+custom:
+  pythonRequirements:
+    dockerizePip: true`;
+  }
+
+  private generateLambdaFunction(): string {
+    return `import json
+import logging
+from main import Pipeline
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+pipeline = Pipeline()
+
+def lambda_handler(event, context):
+    try:
+        if event.get('httpMethod') == 'GET' and event.get('path') == '/health':
+            return health_check(event, context)
+        
+        if event.get('httpMethod') != 'POST':
+            return {
+                'statusCode': 405,
+                'headers': {'Content-Type': 'application/json'},
+                'body': json.dumps({'error': 'Method not allowed'})
+            }
+        
+        body = json.loads(event.get('body', '{}'))
+        input_data = body.get('input_data', {})
+        
+        # Execute pipeline
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        results = loop.run_until_complete(pipeline.execute(input_data))
+        loop.close()
+        
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            'body': json.dumps({
+                'success': True,
+                'results': results
+            }, default=str)
+        }
+        
+    except Exception as e:
+        logger.error(f"Pipeline execution failed: {e}")
+        return {
+            'statusCode': 500,
+            'headers': {'Content-Type': 'application/json'},
+            'body': json.dumps({'error': str(e)})
+        }
+
+def health_check(event, context):
+    return {
+        'statusCode': 200,
+        'headers': {'Content-Type': 'application/json'},
+        'body': json.dumps({'status': 'healthy', 'pipeline': '${this.pipeline.title}'})
+    }`;
+  }
+
+  private generateCloudBuildConfig(): string {
+    const appName = this.pipeline.title.toLowerCase().replace(/\s+/g, '-');
+    return `steps:
+  # Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/${appName}:$COMMIT_SHA', '.']
+  
+  # Push the container image to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/${appName}:$COMMIT_SHA']
+  
+  # Deploy container image to Cloud Run
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args:
+    - 'run'
+    - 'deploy'
+    - '${appName}'
+    - '--image'
+    - 'gcr.io/$PROJECT_ID/${appName}:$COMMIT_SHA'
+    - '--region'
+    - 'us-central1'
+    - '--platform'
+    - 'managed'
+    - '--allow-unauthenticated'
+
+images:
+  - 'gcr.io/$PROJECT_ID/${appName}:$COMMIT_SHA'`;
+  }
+
+  private generateCloudRunService(): string {
+    const appName = this.pipeline.title.toLowerCase().replace(/\s+/g, '-');
+    return `apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: ${appName}
+  annotations:
+    run.googleapis.com/ingress: all
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/maxScale: "${this.config.deployment.autoScale ? '10' : '1'}"
+        run.googleapis.com/cpu-throttling: "false"
+    spec:
+      containerConcurrency: 100
+      timeoutSeconds: 300
+      containers:
+      - image: gcr.io/PROJECT_ID/${appName}:latest
+        ports:
+        - containerPort: 8000
+        env:
+${this.getRequiredEnvVars().map(env => `        - name: ${env}
+          valueFrom:
+            secretKeyRef:
+              name: ${appName}-secrets
+              key: ${env.toLowerCase()}`).join('\n')}
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi`;
+  }
+
+  // Monitoring methods
+  private generateHealthCheck(): string {
+    return `#!/usr/bin/env python3
+"""
+Health check monitoring for ${this.pipeline.title}
+"""
+
+import time
+import logging
+import asyncio
+from typing import Dict, Any
+from main import Pipeline
+
+logger = logging.getLogger(__name__)
+
+class HealthChecker:
+    def __init__(self):
+        self.pipeline = Pipeline()
+        self.last_check = None
+        self.status = "unknown"
+    
+    async def check_pipeline_health(self) -> Dict[str, Any]:
+        """Perform comprehensive health check"""
+        start_time = time.time()
+        
+        try:
+            # Test basic pipeline execution
+            test_input = {"query": "health check", "context": "test"}
+            results = await self.pipeline.execute(test_input)
+            
+            execution_time = time.time() - start_time
+            
+            health_status = {
+                "status": "healthy",
+                "timestamp": time.time(),
+                "execution_time_ms": execution_time * 1000,
+                "pipeline_name": "${this.pipeline.title}",
+                "nodes_count": len(self.pipeline.nodes),
+                "edges_count": len(self.pipeline.edges)
+            }
+            
+            self.status = "healthy"
+            self.last_check = time.time()
+            
+            return health_status
+            
+        except Exception as e:
+            logger.error(f"Health check failed: {e}")
+            self.status = "unhealthy"
+            
+            return {
+                "status": "unhealthy",
+                "timestamp": time.time(),
+                "error": str(e),
+                "pipeline_name": "${this.pipeline.title}"
+            }
+    
+    def get_status(self) -> str:
+        """Get current health status"""
+        if self.last_check and time.time() - self.last_check > 300:  # 5 minutes
+            return "stale"
+        return self.status
+
+async def main():
+    checker = HealthChecker()
+    health = await checker.check_pipeline_health()
+    print(f"Health Status: {health}")
+
+if __name__ == "__main__":
+    asyncio.run(main())`;
+  }
+
+  private generateMetrics(): string {
+    return `#!/usr/bin/env python3
+"""
+Metrics collection for ${this.pipeline.title}
+"""
+
+import time
+import json
+import logging
+from typing import Dict, Any, List
+from collections import defaultdict, deque
+from dataclasses import dataclass, asdict
+
+logger = logging.getLogger(__name__)
+
+@dataclass
+class MetricPoint:
+    timestamp: float
+    value: float
+    labels: Dict[str, str] = None
+
+class MetricsCollector:
+    def __init__(self, max_points: int = 1000):
+        self.max_points = max_points
+        self.metrics = defaultdict(lambda: deque(maxlen=max_points))
+        self.counters = defaultdict(int)
+        self.gauges = defaultdict(float)
+    
+    def record_execution_time(self, node_id: str, execution_time: float):
+        """Record execution time for a node"""
+        self.metrics[f"execution_time_{node_id}"].append(
+            MetricPoint(time.time(), execution_time, {"node_id": node_id})
+        )
+    
+    def record_error(self, node_id: str, error_type: str):
+        """Record an error occurrence"""
+        self.counters[f"errors_{node_id}_{error_type}"] += 1
+        self.metrics[f"error_rate_{node_id}"].append(
+            MetricPoint(time.time(), 1, {"node_id": node_id, "error_type": error_type})
+        )
+    
+    def record_success(self, node_id: str):
+        """Record successful execution"""
+        self.counters[f"success_{node_id}"] += 1
+        self.metrics[f"success_rate_{node_id}"].append(
+            MetricPoint(time.time(), 1, {"node_id": node_id})
+        )
+    
+    def set_gauge(self, name: str, value: float, labels: Dict[str, str] = None):
+        """Set a gauge metric"""
+        self.gauges[name] = value
+        self.metrics[name].append(MetricPoint(time.time(), value, labels))
+    
+    def get_metrics_summary(self) -> Dict[str, Any]:
+        """Get summary of all metrics"""
+        summary = {
+            "timestamp": time.time(),
+            "counters": dict(self.counters),
+            "gauges": dict(self.gauges),
+            "recent_metrics": {}
+        }
+        
+        # Get recent metrics (last 100 points)
+        for metric_name, points in self.metrics.items():
+            if points:
+                recent_points = list(points)[-100:]
+                summary["recent_metrics"][metric_name] = [
+                    asdict(point) for point in recent_points
+                ]
+        
+        return summary
+    
+    def export_prometheus_format(self) -> str:
+        """Export metrics in Prometheus format"""
+        lines = []
+        
+        # Counters
+        for name, value in self.counters.items():
+            lines.append(f"# TYPE {name} counter")
+            lines.append(f"{name} {value}")
+        
+        # Gauges
+        for name, value in self.gauges.items():
+            lines.append(f"# TYPE {name} gauge")
+            lines.append(f"{name} {value}")
+        
+        return "\\n".join(lines)
+
+# Global metrics collector instance
+metrics = MetricsCollector()
+
+def record_pipeline_metrics(results: Dict[str, Any], execution_time: float):
+    """Record metrics for a complete pipeline execution"""
+    metrics.set_gauge("pipeline_execution_time", execution_time)
+    metrics.set_gauge("pipeline_nodes_executed", len(results) - 1)  # Exclude 'input'
+    
+    # Count errors
+    error_count = sum(1 for result in results.values() 
+                     if isinstance(result, dict) and "error" in result)
+    metrics.set_gauge("pipeline_error_count", error_count)
+    
+    if error_count == 0:
+        metrics.record_success("pipeline")
+    else:
+        metrics.record_error("pipeline", "execution_error")
+
+async def main():
+    summary = metrics.get_metrics_summary()
+    print(json.dumps(summary, indent=2))
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())`;
+  }
+
+  private generateMonitoringCompose(): string {
+    const appName = this.pipeline.title.toLowerCase().replace(/\s+/g, '-');
+    return `version: '3.8'
+
+services:
+  ${appName}:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=\${OPENAI_API_KEY}
+    depends_on:
+      - prometheus
+      - grafana
+    networks:
+      - monitoring
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+    networks:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    networks:
+      - monitoring
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    ports:
+      - "9100:9100"
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  prometheus_data:
+  grafana_data:`;
+  }
+
+  private generateProductionEnv(): string {
+    return `# Production Environment Variables for ${this.pipeline.title}
+
+# API Keys (Set these in your deployment platform)
+${this.getRequiredEnvVars().map(env => `${env}=`).join('\n')}
+
+# Application Settings
+NODE_ENV=production
+LOG_LEVEL=info
+PORT=8000
+
+# Performance Settings
+MAX_CONCURRENT_REQUESTS=100
+REQUEST_TIMEOUT=30000
+CACHE_TTL=3600
+
+# Monitoring
+ENABLE_METRICS=true
+METRICS_PORT=9090
+HEALTH_CHECK_INTERVAL=30
+
+# Security
+RATE_LIMIT_REQUESTS=100
+RATE_LIMIT_WINDOW=60000
+CORS_ORIGIN=*
+
+# Database (if applicable)
+DATABASE_URL=
+REDIS_URL=
+
+# Error Reporting
+SENTRY_DSN=
+ERROR_REPORTING_ENABLED=true`;
   }
 
   private async logExport(): Promise<void> {
