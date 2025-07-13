@@ -1,3 +1,4 @@
+import { describe, it, expect } from 'vitest';
 import { exportPipeline, ExportConfig } from "@/lib/export-pipeline";
 
 describe('Pipeline Export', () => {

@@ -1,25 +1,26 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useAutosave } from '@/hooks/useAutosave';
 
 // Mock the toast hook
-jest.mock('@/hooks/use-toast', () => ({
+vi.mock('@/hooks/use-toast', () => ({
   useToast: () => ({
-    toast: jest.fn()
+    toast: vi.fn()
   })
 }));
 
 describe('useAutosave Hook', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    jest.useFakeTimers();
+    vi.clearAllMocks();
+    vi.useFakeTimers();
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   it('should save data after interval', async () => {
-    const mockSave = jest.fn().mockResolvedValue(undefined);
+    const mockSave = vi.fn().mockResolvedValue(undefined);
     const { result } = renderHook(() => 
       useAutosave('initial data', { onSave: mockSave, interval: 1000 })
     );
@@ -31,7 +32,7 @@ describe('useAutosave Hook', () => {
 
     // Fast forward time
     act(() => {
-      jest.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(1000);
     });
 
     await waitFor(() => {
@@ -41,11 +42,11 @@ describe('useAutosave Hook', () => {
 
   it('should handle save conflicts with resolver', async () => {
     const conflictError = new Error('Conflict: remote:{"data":"remote version"}');
-    const mockSave = jest.fn()
+    const mockSave = vi.fn()
       .mockRejectedValueOnce(conflictError)
       .mockResolvedValueOnce(undefined);
     
-    const mockResolver = jest.fn((local, remote) => `merged: ${local} + ${remote.data}`);
+    const mockResolver = vi.fn((local, remote) => `merged: ${local} + ${remote.data}`);
 
     const { result } = renderHook(() => 
       useAutosave('local data', { 
@@ -56,7 +57,7 @@ describe('useAutosave Hook', () => {
     );
 
     act(() => {
-      jest.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(1000);
     });
 
     await waitFor(() => {
@@ -66,7 +67,7 @@ describe('useAutosave Hook', () => {
   });
 
   it('should save on manual trigger', async () => {
-    const mockSave = jest.fn().mockResolvedValue(undefined);
+    const mockSave = vi.fn().mockResolvedValue(undefined);
     renderHook(() => useAutosave('test data', { onSave: mockSave }));
 
     // Trigger manual save
@@ -80,12 +81,12 @@ describe('useAutosave Hook', () => {
   });
 
   it('should not save if data hasnt changed', async () => {
-    const mockSave = jest.fn().mockResolvedValue(undefined);
+    const mockSave = vi.fn().mockResolvedValue(undefined);
     renderHook(() => useAutosave('same data', { onSave: mockSave, interval: 1000 }));
 
     // Don't change data, just advance time
     act(() => {
-      jest.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(1000);
     });
 
     // Should not save since data didn't change
@@ -93,13 +94,13 @@ describe('useAutosave Hook', () => {
   });
 
   it('should handle save errors gracefully', async () => {
-    const mockSave = jest.fn().mockRejectedValue(new Error('Save failed'));
+    const mockSave = vi.fn().mockRejectedValue(new Error('Save failed'));
     const { result } = renderHook(() => 
       useAutosave('test data', { onSave: mockSave, interval: 1000 })
     );
 
     act(() => {
-      jest.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(1000);
     });
 
     await waitFor(() => {
@@ -114,18 +115,18 @@ describe('useAutosave Hook', () => {
       savePromiseResolve = resolve;
     });
     
-    const mockSave = jest.fn().mockReturnValue(savePromise);
+    const mockSave = vi.fn().mockReturnValue(savePromise);
     
     renderHook(() => useAutosave('test data', { onSave: mockSave, interval: 100 }));
 
     // Trigger first save
     act(() => {
-      jest.advanceTimersByTime(100);
+      vi.advanceTimersByTime(100);
     });
 
     // Trigger second save before first completes
     act(() => {
-      jest.advanceTimersByTime(100);
+      vi.advanceTimersByTime(100);
     });
 
     // Should only call save once
