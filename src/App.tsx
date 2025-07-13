@@ -31,6 +31,10 @@ const StatusPage = lazy(() => import("./pages/StatusPage"));
 const ApiDocs = lazy(() => import("./pages/ApiDocs"));
 const Support = lazy(() => import("./pages/Support"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const Features = lazy(() => import("./pages/Features"));
+const Pricing = lazy(() => import("./pages/Pricing"));
+const About = lazy(() => import("./pages/About"));
+const Blog = lazy(() => import("./pages/Blog"));
 
 const queryClient = new QueryClient();
 
@@ -58,6 +62,10 @@ const App = () => (
                   <Route path="/integrations/oauth-callback" element={<IntegrationsOAuthCallback />} />
                   <Route path="/test-integrations" element={<TestIntegrations />} />
                   <Route path="/api-keys" element={<ApiKeys />} />
+                  <Route path="/features" element={<Features />} />
+                  <Route path="/pricing" element={<Pricing />} />
+                  <Route path="/about" element={<About />} />
+                  <Route path="/blog" element={<Blog />} />
                   <Route path="/terms" element={<TermsOfService />} />
                   <Route path="/privacy" element={<PrivacyPolicy />} />
                   <Route path="/data-export" element={<DataExport />} />
