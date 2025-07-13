@@ -14,6 +14,156 @@ export type Database = {
   }
   public: {
     Tables: {
+      api_keys: {
+        Row: {
+          created_at: string | null
+          expires_at: string | null
+          id: string
+          is_active: boolean | null
+          key_hash: string
+          key_prefix: string
+          last_used_at: string | null
+          name: string
+          permissions: Json | null
+          team_id: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          key_hash: string
+          key_prefix: string
+          last_used_at?: string | null
+          name: string
+          permissions?: Json | null
+          team_id?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          key_hash?: string
+          key_prefix?: string
+          last_used_at?: string | null
+          name?: string
+          permissions?: Json | null
+          team_id?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_keys_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audit_logs: {
+        Row: {
+          action: Database["public"]["Enums"]["audit_action"]
+          created_at: string | null
+          id: string
+          ip_address: unknown | null
+          metadata: Json | null
+          new_values: Json | null
+          old_values: Json | null
+          resource_id: string | null
+          resource_type: string | null
+          team_id: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: Database["public"]["Enums"]["audit_action"]
+          created_at?: string | null
+          id?: string
+          ip_address?: unknown | null
+          metadata?: Json | null
+          new_values?: Json | null
+          old_values?: Json | null
+          resource_id?: string | null
+          resource_type?: string | null
+          team_id?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: Database["public"]["Enums"]["audit_action"]
+          created_at?: string | null
+          id?: string
+          ip_address?: unknown | null
+          metadata?: Json | null
+          new_values?: Json | null
+          old_values?: Json | null
+          resource_id?: string | null
+          resource_type?: string | null
+          team_id?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      billing_quotas: {
+        Row: {
+          created_at: string | null
+          id: string
+          last_reset: string | null
+          quota_limit: number
+          quota_used: number | null
+          reset_period: string | null
+          resource_type: string
+          subscription_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          last_reset?: string | null
+          quota_limit: number
+          quota_used?: number | null
+          reset_period?: string | null
+          resource_type: string
+          subscription_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          last_reset?: string | null
+          quota_limit?: number
+          quota_used?: number | null
+          reset_period?: string | null
+          resource_type?: string
+          subscription_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_quotas_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       blueprint_sessions: {
         Row: {
           blueprint_id: string
@@ -217,10 +367,13 @@ export type Database = {
           id: string
           is_public: boolean | null
           nodes: Json
+          permissions: Json | null
+          team_id: string | null
           thumbnail: string | null
           title: string
           updated_at: string
           user_id: string
+          workspace_id: string | null
         }
         Insert: {
           created_at?: string
@@ -229,10 +382,13 @@ export type Database = {
           id?: string
           is_public?: boolean | null
           nodes?: Json
+          permissions?: Json | null
+          team_id?: string | null
           thumbnail?: string | null
           title: string
           updated_at?: string
           user_id: string
+          workspace_id?: string | null
         }
         Update: {
           created_at?: string
@@ -241,17 +397,34 @@ export type Database = {
           id?: string
           is_public?: boolean | null
           nodes?: Json
+          permissions?: Json | null
+          team_id?: string | null
           thumbnail?: string | null
           title?: string
           updated_at?: string
           user_id?: string
+          workspace_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "blueprints_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "blueprints_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blueprints_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
         ]
@@ -742,32 +915,56 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          company: string | null
           created_at: string
           email: string
+          email_verified: boolean | null
           full_name: string | null
           id: string
+          is_onboarded: boolean | null
+          job_title: string | null
+          stripe_customer_id: string | null
           subscription_status: string | null
           subscription_tier: string | null
+          timezone: string | null
+          two_factor_enabled: boolean | null
+          two_factor_secret: string | null
           updated_at: string
         }
         Insert: {
           avatar_url?: string | null
+          company?: string | null
           created_at?: string
           email: string
+          email_verified?: boolean | null
           full_name?: string | null
           id: string
+          is_onboarded?: boolean | null
+          job_title?: string | null
+          stripe_customer_id?: string | null
           subscription_status?: string | null
           subscription_tier?: string | null
+          timezone?: string | null
+          two_factor_enabled?: boolean | null
+          two_factor_secret?: string | null
           updated_at?: string
         }
         Update: {
           avatar_url?: string | null
+          company?: string | null
           created_at?: string
           email?: string
+          email_verified?: boolean | null
           full_name?: string | null
           id?: string
+          is_onboarded?: boolean | null
+          job_title?: string | null
+          stripe_customer_id?: string | null
           subscription_status?: string | null
           subscription_tier?: string | null
+          timezone?: string | null
+          two_factor_enabled?: boolean | null
+          two_factor_secret?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -994,6 +1191,106 @@ export type Database = {
           },
         ]
       }
+      subscriptions: {
+        Row: {
+          cancel_at_period_end: boolean | null
+          canceled_at: string | null
+          created_at: string | null
+          current_period_end: string | null
+          current_period_start: string | null
+          id: string
+          status: Database["public"]["Enums"]["subscription_status"]
+          stripe_customer_id: string
+          stripe_subscription_id: string | null
+          team_id: string | null
+          tier: Database["public"]["Enums"]["subscription_tier"]
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          cancel_at_period_end?: boolean | null
+          canceled_at?: string | null
+          created_at?: string | null
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          status?: Database["public"]["Enums"]["subscription_status"]
+          stripe_customer_id: string
+          stripe_subscription_id?: string | null
+          team_id?: string | null
+          tier: Database["public"]["Enums"]["subscription_tier"]
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          cancel_at_period_end?: boolean | null
+          canceled_at?: string | null
+          created_at?: string | null
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          status?: Database["public"]["Enums"]["subscription_status"]
+          stripe_customer_id?: string
+          stripe_subscription_id?: string | null
+          team_id?: string | null
+          tier?: Database["public"]["Enums"]["subscription_tier"]
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_invitations: {
+        Row: {
+          accepted_at: string | null
+          created_at: string | null
+          email: string
+          expires_at: string
+          id: string
+          invitation_token: string
+          invited_by: string
+          role: Database["public"]["Enums"]["team_role"]
+          team_id: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string | null
+          email: string
+          expires_at?: string
+          id?: string
+          invitation_token?: string
+          invited_by: string
+          role?: Database["public"]["Enums"]["team_role"]
+          team_id: string
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string | null
+          email?: string
+          expires_at?: string
+          id?: string
+          invitation_token?: string
+          invited_by?: string
+          role?: Database["public"]["Enums"]["team_role"]
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_invitations_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       team_members: {
         Row: {
           email: string
@@ -1045,8 +1342,14 @@ export type Database = {
           id: string
           name: string
           owner_id: string
+          settings: Json | null
+          stripe_customer_id: string | null
+          subscription_status:
+            | Database["public"]["Enums"]["subscription_status"]
+            | null
           subscription_tier: string
           updated_at: string
+          workspace_id: string | null
         }
         Insert: {
           created_at?: string
@@ -1054,8 +1357,14 @@ export type Database = {
           id?: string
           name: string
           owner_id: string
+          settings?: Json | null
+          stripe_customer_id?: string | null
+          subscription_status?:
+            | Database["public"]["Enums"]["subscription_status"]
+            | null
           subscription_tier: string
           updated_at?: string
+          workspace_id?: string | null
         }
         Update: {
           created_at?: string
@@ -1063,8 +1372,159 @@ export type Database = {
           id?: string
           name?: string
           owner_id?: string
+          settings?: Json | null
+          stripe_customer_id?: string | null
+          subscription_status?:
+            | Database["public"]["Enums"]["subscription_status"]
+            | null
           subscription_tier?: string
           updated_at?: string
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "teams_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      two_factor_backup_codes: {
+        Row: {
+          code_hash: string
+          created_at: string | null
+          id: string
+          used_at: string | null
+          user_id: string
+        }
+        Insert: {
+          code_hash: string
+          created_at?: string | null
+          id?: string
+          used_at?: string | null
+          user_id: string
+        }
+        Update: {
+          code_hash?: string
+          created_at?: string | null
+          id?: string
+          used_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      usage_logs: {
+        Row: {
+          cost_cents: number | null
+          created_at: string | null
+          id: string
+          metadata: Json | null
+          quantity: number | null
+          resource_id: string | null
+          resource_type: string
+          team_id: string | null
+          user_id: string
+        }
+        Insert: {
+          cost_cents?: number | null
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          quantity?: number | null
+          resource_id?: string | null
+          resource_type: string
+          team_id?: string | null
+          user_id: string
+        }
+        Update: {
+          cost_cents?: number | null
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          quantity?: number | null
+          resource_id?: string | null
+          resource_type?: string
+          team_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usage_logs_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_sessions: {
+        Row: {
+          created_at: string | null
+          expires_at: string
+          id: string
+          ip_address: unknown | null
+          is_active: boolean | null
+          last_activity: string | null
+          session_token: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          expires_at: string
+          id?: string
+          ip_address?: unknown | null
+          is_active?: boolean | null
+          last_activity?: string | null
+          session_token: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+          ip_address?: unknown | null
+          is_active?: boolean | null
+          last_activity?: string | null
+          session_token?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      workspaces: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          is_personal: boolean | null
+          name: string
+          owner_id: string
+          settings: Json | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_personal?: boolean | null
+          name: string
+          owner_id: string
+          settings?: Json | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_personal?: boolean | null
+          name?: string
+          owner_id?: string
+          settings?: Json | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -1128,6 +1588,18 @@ export type Database = {
         }
         Returns: string
       }
+      get_user_team_role: {
+        Args: { _team_id: string; _user_id: string }
+        Returns: Database["public"]["Enums"]["team_role"]
+      }
+      has_team_permission: {
+        Args: {
+          _team_id: string
+          _user_id: string
+          _required_role?: Database["public"]["Enums"]["team_role"]
+        }
+        Returns: boolean
+      }
       sanitize_input: {
         Args: { p_input: string; p_max_length?: number; p_allow_html?: boolean }
         Returns: string
@@ -1142,7 +1614,18 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      audit_action:
+        | "create"
+        | "update"
+        | "delete"
+        | "invite"
+        | "remove"
+        | "login"
+        | "logout"
+        | "access"
+      subscription_status: "active" | "past_due" | "canceled" | "unpaid"
+      subscription_tier: "free" | "pro" | "enterprise"
+      team_role: "owner" | "admin" | "member" | "viewer"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1269,6 +1752,20 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      audit_action: [
+        "create",
+        "update",
+        "delete",
+        "invite",
+        "remove",
+        "login",
+        "logout",
+        "access",
+      ],
+      subscription_status: ["active", "past_due", "canceled", "unpaid"],
+      subscription_tier: ["free", "pro", "enterprise"],
+      team_role: ["owner", "admin", "member", "viewer"],
+    },
   },
 } as const

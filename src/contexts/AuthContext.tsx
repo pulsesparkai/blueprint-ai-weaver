@@ -2,15 +2,37 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
+interface Team {
+  id: string;
+  name: string;
+  description?: string;
+  role: 'owner' | 'admin' | 'member' | 'viewer';
+  subscription_tier: 'free' | 'pro' | 'enterprise';
+}
+
+interface Subscription {
+  id: string;
+  tier: 'free' | 'pro' | 'enterprise';
+  status: 'active' | 'past_due' | 'canceled' | 'unpaid';
+  current_period_end?: string;
+  cancel_at_period_end?: boolean;
+}
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  profile: any;
+  teams: Team[];
+  currentTeam: Team | null;
+  subscription: Subscription | null;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
-  profile: any;
   refreshProfile: () => Promise<void>;
+  refreshTeams: () => Promise<void>;
+  switchTeam: (teamId: string) => void;
+  refreshSubscription: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -20,6 +42,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<any>(null);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [currentTeam, setCurrentTeam] = useState<Team | null>(null);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
 
   useEffect(() => {
     // Set up auth state listener
@@ -29,12 +54,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          // Fetch user profile
+          // Fetch user data in background
           setTimeout(() => {
-            fetchUserProfile(session.user.id);
+            fetchUserData(session.user.id);
           }, 0);
         } else {
           setProfile(null);
+          setTeams([]);
+          setCurrentTeam(null);
+          setSubscription(null);
         }
         setLoading(false);
       }
@@ -45,13 +73,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchUserProfile(session.user.id);
+        fetchUserData(session.user.id);
       }
       setLoading(false);
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const fetchUserData = async (userId: string) => {
+    try {
+      await Promise.all([
+        fetchUserProfile(userId),
+        fetchUserTeams(),
+        fetchUserSubscription()
+      ]);
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+    }
+  };
 
   const fetchUserProfile = async (userId: string) => {
     try {
@@ -68,9 +108,72 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const fetchUserTeams = async () => {
+    try {
+      const { data } = await supabase.functions.invoke('team-management', {
+        body: { action: 'list-teams' }
+      });
+
+      if (data?.teams) {
+        const formattedTeams = data.teams.map((tm: any) => ({
+          id: tm.teams.id,
+          name: tm.teams.name,
+          description: tm.teams.description,
+          role: tm.role,
+          subscription_tier: tm.teams.subscription_tier
+        }));
+        
+        setTeams(formattedTeams);
+        
+        // Set first team as current if none selected
+        if (formattedTeams.length > 0 && !currentTeam) {
+          setCurrentTeam(formattedTeams[0]);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching teams:', error);
+    }
+  };
+
+  const fetchUserSubscription = async () => {
+    try {
+      const { data } = await supabase.functions.invoke('subscription-management', {
+        body: { 
+          action: 'check-subscription',
+          teamId: currentTeam?.id 
+        }
+      });
+
+      if (data?.subscription) {
+        setSubscription(data.subscription);
+      }
+    } catch (error) {
+      console.error('Error fetching subscription:', error);
+    }
+  };
+
   const refreshProfile = async () => {
     if (user) {
       await fetchUserProfile(user.id);
+    }
+  };
+
+  const refreshTeams = async () => {
+    await fetchUserTeams();
+  };
+
+  const refreshSubscription = async () => {
+    await fetchUserSubscription();
+  };
+
+  const switchTeam = (teamId: string) => {
+    const team = teams.find(t => t.id === teamId);
+    if (team) {
+      setCurrentTeam(team);
+      // Refresh subscription for new team context
+      setTimeout(() => {
+        fetchUserSubscription();
+      }, 0);
     }
   };
 
@@ -106,11 +209,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     session,
     loading,
+    profile,
+    teams,
+    currentTeam,
+    subscription,
     signUp,
     signIn,
     signOut,
-    profile,
-    refreshProfile
+    refreshProfile,
+    refreshTeams,
+    switchTeam,
+    refreshSubscription
   };
 
   return (
