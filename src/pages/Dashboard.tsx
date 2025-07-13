@@ -57,10 +57,11 @@ interface Blueprint {
 interface ExecutionLog {
   id: string;
   blueprint_id: string;
-  executed_at: string;
-  execution_results: any;
-  input_data: any;
-  session_id: string;
+  started_at: string;
+  completed_at?: string;
+  status: string;
+  error_message?: string;
+  blueprints?: { title: string };
 }
 
 interface DashboardStats {
@@ -72,48 +73,19 @@ interface DashboardStats {
   successRate: number;
 }
 
-const FEATURED_TEMPLATES = [
-  {
-    id: 'customer-support-bot',
-    name: 'Customer Support Bot',
-    description: 'AI-powered customer support with context-aware responses',
-    icon: MessageSquare,
-    category: 'Customer Service',
-    difficulty: 'Beginner',
-    estimatedTime: '15 min'
-  },
-  {
-    id: 'document-qa-system',
-    name: 'Document QA System',
-    description: 'Question-answering system for large documents',
-    icon: FileText,
-    category: 'Document Processing',
-    difficulty: 'Intermediate',
-    estimatedTime: '25 min'
-  },
-  {
-    id: 'code-assistant',
-    name: 'Code Assistant',
-    description: 'AI coding assistant with documentation context',
-    icon: Code2,
-    category: 'Development',
-    difficulty: 'Advanced',
-    estimatedTime: '30 min'
-  },
-  {
-    id: 'research-assistant',
-    name: 'Research Assistant',
-    description: 'Search, summarize, and synthesize information',
-    icon: Search,
-    category: 'Research',
-    difficulty: 'Intermediate',
-    estimatedTime: '20 min'
-  }
-];
+interface Template {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  difficulty: string;
+  estimated_time: string;
+}
 
 export default function Dashboard() {
   const [blueprints, setBlueprints] = useState<Blueprint[]>([]);
   const [recentExecutions, setRecentExecutions] = useState<ExecutionLog[]>([]);
+  const [featuredTemplates, setFeaturedTemplates] = useState<Template[]>([]);
   const [stats, setStats] = useState<DashboardStats>({
     totalBlueprints: 0,
     executionsToday: 0,
@@ -141,6 +113,7 @@ export default function Dashboard() {
       await Promise.all([
         fetchBlueprints(),
         fetchExecutionLogs(),
+        fetchFeaturedTemplates(),
         fetchStats()
       ]);
     } catch (error: any) {
@@ -167,26 +140,88 @@ export default function Dashboard() {
 
   const fetchExecutionLogs = async () => {
     const { data, error } = await supabase
-      .from('execution_logs')
-      .select('*')
-      .order('executed_at', { ascending: false })
+      .from('simulation_logs')
+      .select('*, blueprints(title)')
+      .order('started_at', { ascending: false })
       .limit(5);
 
     if (error) throw error;
     setRecentExecutions(data || []);
   };
 
+  const fetchFeaturedTemplates = async () => {
+    const { data, error } = await supabase
+      .from('blueprint_templates')
+      .select('id, name, description, category, difficulty, estimated_time')
+      .order('usage_count', { ascending: false })
+      .limit(4);
+
+    if (error) throw error;
+    setFeaturedTemplates(data || []);
+  };
+
   const fetchStats = async () => {
-    // Mock stats - in real implementation, calculate from actual data
-    const mockStats: DashboardStats = {
-      totalBlueprints: blueprints.length,
-      executionsToday: 24,
-      tokensUsed: 145690,
-      totalCost: 2.34,
-      avgExecutionTime: 1847,
-      successRate: 96.8
-    };
-    setStats(mockStats);
+    try {
+      // Get total blueprints count
+      const { count: totalBlueprints } = await supabase
+        .from('blueprints')
+        .select('*', { count: 'exact', head: true });
+
+      // Get executions today
+      const today = startOfDay(new Date()).toISOString();
+      const { count: executionsToday } = await supabase
+        .from('simulation_logs')
+        .select('*', { count: 'exact', head: true })
+        .gte('started_at', today);
+
+      // Get simulation metrics for today
+      const { data: todayMetrics, error: metricsError } = await supabase
+        .from('simulation_metrics')
+        .select('tokens_input, tokens_output, cost_usd, latency_ms')
+        .gte('created_at', today);
+
+      if (metricsError) throw metricsError;
+
+      // Calculate aggregated stats
+      const tokensUsed = todayMetrics?.reduce((sum, metric) => 
+        sum + (metric.tokens_input || 0) + (metric.tokens_output || 0), 0) || 0;
+      
+      const totalCost = todayMetrics?.reduce((sum, metric) => 
+        sum + (metric.cost_usd || 0), 0) || 0;
+      
+      const avgExecutionTime = todayMetrics?.length ? 
+        todayMetrics.reduce((sum, metric) => sum + (metric.latency_ms || 0), 0) / todayMetrics.length : 0;
+
+      // Get success rate from last 30 days
+      const thirtyDaysAgo = subDays(new Date(), 30).toISOString();
+      const { data: recentSimulations } = await supabase
+        .from('simulation_logs')
+        .select('status')
+        .gte('started_at', thirtyDaysAgo);
+
+      const successRate = recentSimulations?.length ? 
+        (recentSimulations.filter(sim => sim.status === 'completed').length / recentSimulations.length) * 100 : 0;
+
+      setStats({
+        totalBlueprints: totalBlueprints || 0,
+        executionsToday: executionsToday || 0,
+        tokensUsed,
+        totalCost,
+        avgExecutionTime: Math.round(avgExecutionTime),
+        successRate: Math.round(successRate * 10) / 10
+      });
+    } catch (error: any) {
+      console.error('Error fetching stats:', error);
+      // Fallback to default stats
+      setStats({
+        totalBlueprints: 0,
+        executionsToday: 0,
+        tokensUsed: 0,
+        totalCost: 0,
+        avgExecutionTime: 0,
+        successRate: 0
+      });
+    }
   };
 
   const createBlueprint = async () => {
@@ -473,8 +508,17 @@ export default function Dashboard() {
             <div>
               <h3 className="text-lg font-semibold text-foreground mb-4">Popular Templates</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {FEATURED_TEMPLATES.map((template) => {
-                  const IconComponent = template.icon;
+                {featuredTemplates.map((template) => {
+                  const getIconForCategory = (category: string) => {
+                    switch (category.toLowerCase()) {
+                      case 'customer service': return MessageSquare;
+                      case 'document processing': return FileText;
+                      case 'development': return Code2;
+                      case 'research': return Search;
+                      default: return Bot;
+                    }
+                  };
+                  const IconComponent = getIconForCategory(template.category);
                   return (
                     <Card 
                       key={template.id} 
@@ -496,7 +540,7 @@ export default function Dashboard() {
                         <p className="text-xs text-muted-foreground mb-3">{template.description}</p>
                         <div className="flex items-center justify-between text-xs text-muted-foreground">
                           <span>{template.category}</span>
-                          <span>{template.estimatedTime}</span>
+                          <span>{template.estimated_time}</span>
                         </div>
                       </CardContent>
                     </Card>
@@ -610,8 +654,17 @@ export default function Dashboard() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {FEATURED_TEMPLATES.map((template) => {
-                const IconComponent = template.icon;
+              {featuredTemplates.map((template) => {
+                const getIconForCategory = (category: string) => {
+                  switch (category.toLowerCase()) {
+                    case 'customer service': return MessageSquare;
+                    case 'document processing': return FileText;
+                    case 'development': return Code2;
+                    case 'research': return Search;
+                    default: return Bot;
+                  }
+                };
+                const IconComponent = getIconForCategory(template.category);
                 return (
                   <Card 
                     key={template.id} 
@@ -639,7 +692,7 @@ export default function Dashboard() {
                     </CardHeader>
                     <CardContent>
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">{template.estimatedTime} setup</span>
+                        <span className="text-sm text-muted-foreground">{template.estimated_time} setup</span>
                         <Button size="sm">
                           Use Template
                           <ArrowRight className="w-4 h-4 ml-2" />
@@ -682,7 +735,7 @@ export default function Dashboard() {
                                 {blueprint?.title || 'Unknown Pipeline'}
                               </p>
                               <p className="text-sm text-muted-foreground">
-                                Executed {format(new Date(execution.executed_at), 'PPp')}
+                                Executed {format(new Date(execution.started_at), 'PPp')}
                               </p>
                             </div>
                           </div>

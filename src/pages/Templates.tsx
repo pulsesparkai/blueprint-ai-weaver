@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { 
@@ -18,14 +18,10 @@ import {
   Code, 
   Search, 
   Eye,
-  Settings,
-  Copy,
-  Download,
-  Sparkles,
-  Users,
-  Database,
   Bot,
-  Plus
+  Plus,
+  Filter,
+  Sparkles
 } from 'lucide-react';
 
 interface TemplateConfig {
@@ -50,528 +46,105 @@ interface TemplateConfig {
   estimatedTime: string;
 }
 
-const TEMPLATES: TemplateConfig[] = [
-  {
-    id: 'customer-support-bot',
-    name: 'Customer Support Bot',
-    description: 'AI-powered customer support system with context-aware responses',
-    category: 'Customer Service',
-    difficulty: 'Beginner',
-    estimatedTime: '15 min setup',
-    preview: '/api/placeholder/400/200',
-    instructions: `This template creates a customer support bot that:
-1. Takes user queries as input
-2. Retrieves relevant support documentation using RAG
-3. Builds context from previous conversations
-4. Generates helpful, context-aware responses
-5. Outputs formatted support responses
-
-Perfect for automated customer service, FAQ systems, and support ticket automation.`,
-    parameters: [
-      {
-        name: 'supportModel',
-        type: 'select',
-        label: 'LLM Model',
-        defaultValue: 'gpt-4.1-2025-04-14',
-        options: ['gpt-4.1-2025-04-14', 'gpt-4o', 'claude-3.5-sonnet'],
-        description: 'Choose the LLM model for generating responses'
-      },
-      {
-        name: 'temperature',
-        type: 'number',
-        label: 'Response Creativity',
-        defaultValue: 0.3,
-        description: 'Lower values for more consistent responses (0.0-1.0)'
-      },
-      {
-        name: 'maxTokens',
-        type: 'number',
-        label: 'Max Response Length',
-        defaultValue: 500,
-        description: 'Maximum tokens in the response'
-      },
-      {
-        name: 'vectorStore',
-        type: 'select',
-        label: 'Knowledge Base',
-        defaultValue: 'pinecone',
-        options: ['pinecone', 'weaviate', 'qdrant'],
-        description: 'Vector database for storing support documentation'
-      }
-    ],
-    useCases: [
-      'Customer support automation',
-      'FAQ chatbots',
-      'Help desk systems',
-      'Technical support',
-      'Product inquiries'
-    ],
-    nodes: [
-      {
-        id: 'input-1',
-        type: 'InputNode',
-        position: { x: 100, y: 200 },
-        data: { label: 'Customer Query', inputType: 'text' }
-      },
-      {
-        id: 'rag-1',
-        type: 'RAGRetrieverNode',
-        position: { x: 300, y: 200 },
-        data: { 
-          label: 'Support Knowledge Base',
-          vectorStore: 'pinecone',
-          topK: 5,
-          indexName: 'support-docs'
-        }
-      },
-      {
-        id: 'context-1',
-        type: 'ContextBuilderNode',
-        position: { x: 500, y: 200 },
-        data: { 
-          label: 'Context Builder',
-          template: 'Support context: {rag_results}\n\nCustomer query: {user_input}'
-        }
-      },
-      {
-        id: 'llm-1',
-        type: 'PromptTemplateNode',
-        position: { x: 700, y: 200 },
-        data: { 
-          label: 'Support Assistant',
-          model: 'gpt-4.1-2025-04-14',
-          temperature: 0.3,
-          maxTokens: 500,
-          systemPrompt: 'You are a helpful customer support assistant. Provide clear, accurate, and friendly responses based on the knowledge base context.',
-          prompt: '{context}'
-        }
-      },
-      {
-        id: 'output-1',
-        type: 'OutputNode',
-        position: { x: 900, y: 200 },
-        data: { label: 'Support Response', format: 'text' }
-      }
-    ],
-    edges: [
-      { id: 'e1-2', source: 'input-1', target: 'rag-1', sourceHandle: 'output', targetHandle: 'input' },
-      { id: 'e2-3', source: 'rag-1', target: 'context-1', sourceHandle: 'output', targetHandle: 'rag' },
-      { id: 'e1-3', source: 'input-1', target: 'context-1', sourceHandle: 'output', targetHandle: 'input' },
-      { id: 'e3-4', source: 'context-1', target: 'llm-1', sourceHandle: 'output', targetHandle: 'input' },
-      { id: 'e4-5', source: 'llm-1', target: 'output-1', sourceHandle: 'output', targetHandle: 'input' }
-    ]
-  },
-  {
-    id: 'document-qa-system',
-    name: 'Document QA System',
-    description: 'Question-answering system that processes and queries large documents',
-    category: 'Document Processing',
-    difficulty: 'Intermediate',
-    estimatedTime: '25 min setup',
-    preview: '/api/placeholder/400/200',
-    instructions: `This template creates a document QA system that:
-1. Loads and processes documents (PDF, text, etc.)
-2. Chunks documents into manageable pieces
-3. Stores document chunks in a vector database
-4. Retrieves relevant chunks based on user questions
-5. Generates accurate answers with source citations
-
-Ideal for research, legal document analysis, and knowledge management systems.`,
-    parameters: [
-      {
-        name: 'chunkSize',
-        type: 'number',
-        label: 'Chunk Size',
-        defaultValue: 1000,
-        description: 'Number of characters per document chunk'
-      },
-      {
-        name: 'chunkOverlap',
-        type: 'number',
-        label: 'Chunk Overlap',
-        defaultValue: 200,
-        description: 'Character overlap between chunks'
-      },
-      {
-        name: 'qaModel',
-        type: 'select',
-        label: 'QA Model',
-        defaultValue: 'gpt-4.1-2025-04-14',
-        options: ['gpt-4.1-2025-04-14', 'gpt-4o', 'claude-3.5-sonnet'],
-        description: 'Model for answering questions'
-      },
-      {
-        name: 'includeSource',
-        type: 'select',
-        label: 'Include Sources',
-        defaultValue: 'yes',
-        options: ['yes', 'no'],
-        description: 'Include source citations in answers'
-      }
-    ],
-    useCases: [
-      'Research paper analysis',
-      'Legal document review',
-      'Technical documentation QA',
-      'Knowledge base queries',
-      'Academic research'
-    ],
-    nodes: [
-      {
-        id: 'input-1',
-        type: 'InputNode',
-        position: { x: 50, y: 200 },
-        data: { label: 'User Question', inputType: 'text' }
-      },
-      {
-        id: 'loader-1',
-        type: 'DocumentLoaderNode',
-        position: { x: 250, y: 100 },
-        data: { 
-          label: 'Document Loader',
-          fileTypes: ['pdf', 'txt', 'docx'],
-          batchSize: 10
-        }
-      },
-      {
-        id: 'chunker-1',
-        type: 'TextChunkerNode',
-        position: { x: 450, y: 100 },
-        data: { 
-          label: 'Text Chunker',
-          chunkSize: 1000,
-          overlap: 200,
-          strategy: 'recursive'
-        }
-      },
-      {
-        id: 'rag-1',
-        type: 'RAGRetrieverNode',
-        position: { x: 650, y: 200 },
-        data: { 
-          label: 'Document Search',
-          vectorStore: 'pinecone',
-          topK: 5,
-          indexName: 'documents'
-        }
-      },
-      {
-        id: 'llm-1',
-        type: 'PromptTemplateNode',
-        position: { x: 850, y: 200 },
-        data: { 
-          label: 'QA Assistant',
-          model: 'gpt-4.1-2025-04-14',
-          temperature: 0.1,
-          maxTokens: 800,
-          systemPrompt: 'Answer questions based on the provided document context. Be accurate and cite sources when possible.',
-          prompt: 'Context: {context}\n\nQuestion: {question}\n\nAnswer:'
-        }
-      },
-      {
-        id: 'output-1',
-        type: 'OutputNode',
-        position: { x: 1050, y: 200 },
-        data: { label: 'QA Response', format: 'markdown' }
-      }
-    ],
-    edges: [
-      { id: 'e1-2', source: 'loader-1', target: 'chunker-1', sourceHandle: 'output', targetHandle: 'input' },
-      { id: 'e2-3', source: 'chunker-1', target: 'rag-1', sourceHandle: 'output', targetHandle: 'documents' },
-      { id: 'e3-4', source: 'input-1', target: 'rag-1', sourceHandle: 'output', targetHandle: 'query' },
-      { id: 'e4-5', source: 'rag-1', target: 'llm-1', sourceHandle: 'output', targetHandle: 'context' },
-      { id: 'e1-5', source: 'input-1', target: 'llm-1', sourceHandle: 'output', targetHandle: 'question' },
-      { id: 'e5-6', source: 'llm-1', target: 'output-1', sourceHandle: 'output', targetHandle: 'input' }
-    ]
-  },
-  {
-    id: 'code-assistant',
-    name: 'Code Assistant',
-    description: 'AI coding assistant with context from documentation and existing code',
-    category: 'Development',
-    difficulty: 'Advanced',
-    estimatedTime: '30 min setup',
-    preview: '/api/placeholder/400/200',
-    instructions: `This template creates a code assistant that:
-1. Takes coding questions or requests as input
-2. Gathers context from existing codebase
-3. Retrieves relevant documentation from vector store
-4. Generates code solutions with explanations
-5. Formats output with proper syntax highlighting
-
-Perfect for code review, debugging assistance, and learning new frameworks.`,
-    parameters: [
-      {
-        name: 'language',
-        type: 'select',
-        label: 'Programming Language',
-        defaultValue: 'python',
-        options: ['python', 'javascript', 'typescript', 'java', 'go', 'rust'],
-        description: 'Primary programming language'
-      },
-      {
-        name: 'codeModel',
-        type: 'select',
-        label: 'Code Model',
-        defaultValue: 'gpt-4.1-2025-04-14',
-        options: ['gpt-4.1-2025-04-14', 'o4-mini-2025-04-16', 'claude-3.5-sonnet'],
-        description: 'Model specialized for code generation'
-      },
-      {
-        name: 'includeTests',
-        type: 'select',
-        label: 'Include Tests',
-        defaultValue: 'yes',
-        options: ['yes', 'no'],
-        description: 'Generate unit tests with code'
-      },
-      {
-        name: 'codeStyle',
-        type: 'select',
-        label: 'Code Style',
-        defaultValue: 'clean',
-        options: ['clean', 'functional', 'enterprise', 'minimal'],
-        description: 'Preferred coding style'
-      }
-    ],
-    useCases: [
-      'Code generation',
-      'Code review assistance',
-      'Debugging help',
-      'API documentation queries',
-      'Best practices guidance'
-    ],
-    nodes: [
-      {
-        id: 'input-1',
-        type: 'InputNode',
-        position: { x: 50, y: 250 },
-        data: { label: 'Coding Request', inputType: 'text' }
-      },
-      {
-        id: 'context-1',
-        type: 'CodeContextNode',
-        position: { x: 250, y: 150 },
-        data: { 
-          label: 'Code Context',
-          language: 'python',
-          includeImports: true,
-          maxLines: 100
-        }
-      },
-      {
-        id: 'rag-1',
-        type: 'RAGRetrieverNode',
-        position: { x: 250, y: 350 },
-        data: { 
-          label: 'Documentation RAG',
-          vectorStore: 'pinecone',
-          topK: 3,
-          indexName: 'code-docs'
-        }
-      },
-      {
-        id: 'llm-1',
-        type: 'PromptTemplateNode',
-        position: { x: 500, y: 250 },
-        data: { 
-          label: 'Code Generator',
-          model: 'gpt-4.1-2025-04-14',
-          temperature: 0.2,
-          maxTokens: 1500,
-          systemPrompt: 'You are an expert programmer. Generate clean, well-documented code with explanations.',
-          prompt: 'Code context: {code_context}\n\nDocumentation: {docs}\n\nRequest: {request}\n\nGenerate:'
-        }
-      },
-      {
-        id: 'formatter-1',
-        type: 'CodeFormatterNode',
-        position: { x: 700, y: 250 },
-        data: { 
-          label: 'Code Formatter',
-          language: 'python',
-          style: 'black',
-          addComments: true
-        }
-      },
-      {
-        id: 'output-1',
-        type: 'OutputNode',
-        position: { x: 900, y: 250 },
-        data: { label: 'Generated Code', format: 'code' }
-      }
-    ],
-    edges: [
-      { id: 'e1-2', source: 'input-1', target: 'context-1', sourceHandle: 'output', targetHandle: 'input' },
-      { id: 'e1-3', source: 'input-1', target: 'rag-1', sourceHandle: 'output', targetHandle: 'query' },
-      { id: 'e2-4', source: 'context-1', target: 'llm-1', sourceHandle: 'output', targetHandle: 'code_context' },
-      { id: 'e3-4', source: 'rag-1', target: 'llm-1', sourceHandle: 'output', targetHandle: 'docs' },
-      { id: 'e1-4', source: 'input-1', target: 'llm-1', sourceHandle: 'output', targetHandle: 'request' },
-      { id: 'e4-5', source: 'llm-1', target: 'formatter-1', sourceHandle: 'output', targetHandle: 'input' },
-      { id: 'e5-6', source: 'formatter-1', target: 'output-1', sourceHandle: 'output', targetHandle: 'input' }
-    ]
-  },
-  {
-    id: 'research-assistant',
-    name: 'Research Assistant',
-    description: 'AI research assistant that searches, summarizes, and synthesizes information',
-    category: 'Research',
-    difficulty: 'Intermediate',
-    estimatedTime: '20 min setup',
-    preview: '/api/placeholder/400/200',
-    instructions: `This template creates a research assistant that:
-1. Takes research queries as input
-2. Searches web sources and academic papers
-3. Retrieves relevant papers from vector database
-4. Summarizes findings from multiple sources
-5. Synthesizes comprehensive research reports
-
-Ideal for academic research, market analysis, and literature reviews.`,
-    parameters: [
-      {
-        name: 'searchSources',
-        type: 'select',
-        label: 'Search Sources',
-        defaultValue: 'academic',
-        options: ['academic', 'web', 'both'],
-        description: 'Types of sources to search'
-      },
-      {
-        name: 'summaryLength',
-        type: 'select',
-        label: 'Summary Length',
-        defaultValue: 'medium',
-        options: ['short', 'medium', 'long'],
-        description: 'Length of generated summaries'
-      },
-      {
-        name: 'researchModel',
-        type: 'select',
-        label: 'Research Model',
-        defaultValue: 'gpt-4.1-2025-04-14',
-        options: ['gpt-4.1-2025-04-14', 'o3-2025-04-16', 'claude-3.5-sonnet'],
-        description: 'Model for research synthesis'
-      },
-      {
-        name: 'citationStyle',
-        type: 'select',
-        label: 'Citation Style',
-        defaultValue: 'apa',
-        options: ['apa', 'mla', 'chicago', 'ieee'],
-        description: 'Academic citation format'
-      }
-    ],
-    useCases: [
-      'Academic literature reviews',
-      'Market research analysis',
-      'Scientific paper summaries',
-      'Competitive analysis',
-      'Trend identification'
-    ],
-    nodes: [
-      {
-        id: 'input-1',
-        type: 'InputNode',
-        position: { x: 50, y: 300 },
-        data: { label: 'Research Query', inputType: 'text' }
-      },
-      {
-        id: 'search-1',
-        type: 'WebSearchNode',
-        position: { x: 250, y: 200 },
-        data: { 
-          label: 'Web Search',
-          engine: 'google',
-          maxResults: 10,
-          filterType: 'academic'
-        }
-      },
-      {
-        id: 'rag-1',
-        type: 'RAGRetrieverNode',
-        position: { x: 250, y: 400 },
-        data: { 
-          label: 'Paper Database',
-          vectorStore: 'pinecone',
-          topK: 8,
-          indexName: 'research-papers'
-        }
-      },
-      {
-        id: 'summarizer-1',
-        type: 'SummarizerNode',
-        position: { x: 500, y: 300 },
-        data: { 
-          label: 'Content Summarizer',
-          strategy: 'extractive',
-          maxLength: 200,
-          includeKeywords: true
-        }
-      },
-      {
-        id: 'llm-1',
-        type: 'PromptTemplateNode',
-        position: { x: 750, y: 300 },
-        data: { 
-          label: 'Research Synthesizer',
-          model: 'gpt-4.1-2025-04-14',
-          temperature: 0.4,
-          maxTokens: 2000,
-          systemPrompt: 'You are a research assistant. Synthesize information from multiple sources into comprehensive reports with proper citations.',
-          prompt: 'Research topic: {query}\n\nWeb sources: {web_results}\n\nAcademic papers: {papers}\n\nSummary: {summary}\n\nGenerate research report:'
-        }
-      },
-      {
-        id: 'output-1',
-        type: 'OutputNode',
-        position: { x: 1000, y: 300 },
-        data: { label: 'Research Report', format: 'markdown' }
-      }
-    ],
-    edges: [
-      { id: 'e1-2', source: 'input-1', target: 'search-1', sourceHandle: 'output', targetHandle: 'query' },
-      { id: 'e1-3', source: 'input-1', target: 'rag-1', sourceHandle: 'output', targetHandle: 'query' },
-      { id: 'e2-4', source: 'search-1', target: 'summarizer-1', sourceHandle: 'output', targetHandle: 'web_content' },
-      { id: 'e3-4', source: 'rag-1', target: 'summarizer-1', sourceHandle: 'output', targetHandle: 'papers' },
-      { id: 'e4-5', source: 'summarizer-1', target: 'llm-1', sourceHandle: 'output', targetHandle: 'summary' },
-      { id: 'e2-5', source: 'search-1', target: 'llm-1', sourceHandle: 'output', targetHandle: 'web_results' },
-      { id: 'e3-5', source: 'rag-1', target: 'llm-1', sourceHandle: 'output', targetHandle: 'papers' },
-      { id: 'e1-5', source: 'input-1', target: 'llm-1', sourceHandle: 'output', targetHandle: 'query' },
-      { id: 'e5-6', source: 'llm-1', target: 'output-1', sourceHandle: 'output', targetHandle: 'input' }
-    ]
-  }
-];
-
-export default function Templates() {
+export default function TemplatesPage() {
+  const [templates, setTemplates] = useState<TemplateConfig[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateConfig | null>(null);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [importParams, setImportParams] = useState<Record<string, any>>({});
   const [importing, setImporting] = useState(false);
-  const navigate = useNavigate();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedDifficulty, setSelectedDifficulty] = useState('all');
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
-  const categoryIcons = {
-    'Customer Service': MessageSquare,
-    'Document Processing': FileText,
-    'Development': Code,
-    'Research': Search
+  useEffect(() => {
+    fetchTemplates();
+  }, []);
+
+  const fetchTemplates = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('blueprint_templates')
+        .select('*')
+        .order('usage_count', { ascending: false });
+
+      if (error) throw error;
+      
+      // Transform database records to match TemplateConfig interface
+      const transformedTemplates = data.map(template => ({
+        id: template.id,
+        name: template.name,
+        description: template.description,
+        category: template.category,
+        difficulty: template.difficulty as 'Beginner' | 'Intermediate' | 'Advanced',
+        nodes: Array.isArray(template.nodes) ? template.nodes : [],
+        edges: Array.isArray(template.edges) ? template.edges : [],
+        preview: template.thumbnail || '/api/placeholder/400/200',
+        instructions: template.instructions || '',
+        parameters: Array.isArray(template.parameters) ? template.parameters as any[] : [],
+        useCases: Array.isArray(template.use_cases) ? template.use_cases : [],
+        estimatedTime: template.estimated_time || '15 min'
+      }));
+      
+      setTemplates(transformedTemplates);
+    } catch (error: any) {
+      toast({
+        title: "Error loading templates",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const difficultyColors = {
-    'Beginner': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-    'Intermediate': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
-    'Advanced': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
-  };
+  const handleCreateFromTemplate = async (template: TemplateConfig) => {
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to create blueprints",
+        variant: "destructive"
+      });
+      return;
+    }
 
-  const handlePreview = (template: TemplateConfig) => {
-    setSelectedTemplate(template);
-    setImportParams(
-      template.parameters.reduce((acc, param) => ({
-        ...acc,
-        [param.name]: param.defaultValue
-      }), {})
-    );
+    try {
+      const { data, error } = await supabase
+        .from('blueprints')
+        .insert({
+          user_id: user.id,
+          title: `${template.name} - Copy`,
+          description: template.description,
+          nodes: template.nodes,
+          edges: template.edges
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Update usage count
+      await supabase
+        .from('blueprint_templates')
+        .update({ usage_count: (template as any).usage_count + 1 })
+        .eq('id', template.id);
+
+      toast({
+        title: "Blueprint created",
+        description: `Created blueprint from ${template.name} template`
+      });
+
+      navigate(`/editor/${data.id}`);
+    } catch (error: any) {
+      toast({
+        title: "Error creating blueprint",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
   };
 
   const handleImport = async () => {
@@ -638,6 +211,32 @@ export default function Templates() {
     }
   };
 
+  const filteredTemplates = templates.filter(template => {
+    const matchesSearch = template.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         template.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = selectedCategory === 'all' || template.category.toLowerCase() === selectedCategory;
+    const matchesDifficulty = selectedDifficulty === 'all' || template.difficulty.toLowerCase() === selectedDifficulty;
+    
+    return matchesSearch && matchesCategory && matchesDifficulty;
+  });
+
+  const categories = ['all', ...Array.from(new Set(templates.map(t => t.category.toLowerCase())))];
+  const difficulties = ['all', 'beginner', 'intermediate', 'advanced'];
+
+  const categoryIcons = {
+    'customer service': MessageSquare,
+    'document processing': FileText,
+    'development': Code,
+    'research': Search,
+    'rag': FileText
+  };
+
+  const difficultyColors = {
+    'Beginner': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+    'Intermediate': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
+    'Advanced': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
+  };
+
   const openImportDialog = () => {
     if (!user) {
       toast({
@@ -650,6 +249,29 @@ export default function Templates() {
     }
     setShowImportDialog(true);
   };
+
+  const handlePreview = (template: TemplateConfig) => {
+    setSelectedTemplate(template);
+    setImportParams(
+      template.parameters.reduce((acc, param) => ({
+        ...acc,
+        [param.name]: param.defaultValue
+      }), {})
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading templates...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -668,7 +290,7 @@ export default function Templates() {
           </div>
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="text-xs">
-              {TEMPLATES.length} Templates Available
+              {templates.length} Templates Available
             </Badge>
           </div>
         </div>
@@ -676,7 +298,7 @@ export default function Templates() {
 
       <div className="container mx-auto px-6 py-8">
         {/* Introduction */}
-        <div className="text-center mb-12">
+        <div className="text-center mb-8">
           <div className="flex items-center justify-center mb-4">
             <div className="w-12 h-12 rounded-lg bg-gradient-primary flex items-center justify-center">
               <Sparkles className="w-6 h-6 text-primary-foreground" />
@@ -691,10 +313,44 @@ export default function Templates() {
           </p>
         </div>
 
+        {/* Filters */}
+        <div className="flex flex-col sm:flex-row gap-4 mb-8">
+          <Input
+            placeholder="Search templates..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="flex-1"
+          />
+          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+            <SelectTrigger className="w-full sm:w-48">
+              <SelectValue placeholder="All Categories" />
+            </SelectTrigger>
+            <SelectContent>
+              {categories.map(category => (
+                <SelectItem key={category} value={category} className="capitalize">
+                  {category === 'all' ? 'All Categories' : category}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={selectedDifficulty} onValueChange={setSelectedDifficulty}>
+            <SelectTrigger className="w-full sm:w-48">
+              <SelectValue placeholder="All Difficulties" />
+            </SelectTrigger>
+            <SelectContent>
+              {difficulties.map(difficulty => (
+                <SelectItem key={difficulty} value={difficulty} className="capitalize">
+                  {difficulty === 'all' ? 'All Difficulties' : difficulty}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         {/* Template Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {TEMPLATES.map((template) => {
-            const CategoryIcon = categoryIcons[template.category as keyof typeof categoryIcons];
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredTemplates.map((template) => {
+            const CategoryIcon = categoryIcons[template.category.toLowerCase() as keyof typeof categoryIcons] || Bot;
             
             return (
               <Card key={template.id} className="border border-border/50 bg-card/50 backdrop-blur-sm hover:shadow-elegant transition-all duration-200">
@@ -707,7 +363,7 @@ export default function Templates() {
                       <div>
                         <CardTitle className="text-lg font-semibold">{template.name}</CardTitle>
                         <div className="flex items-center gap-2 mt-1">
-                          <Badge variant="secondary" className="text-xs">
+                          <Badge variant="secondary" className="text-xs capitalize">
                             {template.category}
                           </Badge>
                           <Badge 
@@ -744,14 +400,14 @@ export default function Templates() {
                   <div>
                     <p className="text-xs font-medium text-muted-foreground mb-2">Use Cases:</p>
                     <div className="flex flex-wrap gap-1">
-                      {template.useCases.slice(0, 3).map((useCase, idx) => (
+                      {template.useCases.slice(0, 2).map((useCase, idx) => (
                         <Badge key={idx} variant="outline" className="text-xs">
                           {useCase}
                         </Badge>
                       ))}
-                      {template.useCases.length > 3 && (
+                      {template.useCases.length > 2 && (
                         <Badge variant="outline" className="text-xs">
-                          +{template.useCases.length - 3} more
+                          +{template.useCases.length - 2} more
                         </Badge>
                       )}
                     </div>
@@ -786,6 +442,14 @@ export default function Templates() {
           })}
         </div>
 
+        {filteredTemplates.length === 0 && (
+          <div className="text-center py-12">
+            <Bot className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
+            <h3 className="text-lg font-medium text-foreground mb-2">No templates found</h3>
+            <p className="text-muted-foreground">Try adjusting your search criteria or browse all templates.</p>
+          </div>
+        )}
+
         {/* Feature Callout */}
         <Card className="mt-12 border border-primary/20 bg-gradient-to-r from-primary/10 to-purple-500/10">
           <CardContent className="p-8 text-center">
@@ -817,7 +481,7 @@ export default function Templates() {
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-3">
-                  {React.createElement(categoryIcons[selectedTemplate.category as keyof typeof categoryIcons], {
+                  {React.createElement(categoryIcons[selectedTemplate.category.toLowerCase() as keyof typeof categoryIcons] || Bot, {
                     className: "w-6 h-6"
                   })}
                   {selectedTemplate.name}
@@ -837,20 +501,22 @@ export default function Templates() {
                 </div>
 
                 {/* Parameters */}
-                <div>
-                  <h4 className="font-medium text-foreground mb-2">Configuration Parameters</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {selectedTemplate.parameters.map((param) => (
-                      <div key={param.name} className="space-y-2">
-                        <Label className="text-sm font-medium">{param.label}</Label>
-                        <p className="text-xs text-muted-foreground">{param.description}</p>
-                        <div className="px-3 py-2 bg-muted rounded-md text-sm">
-                          Default: {String(param.defaultValue)}
+                {selectedTemplate.parameters.length > 0 && (
+                  <div>
+                    <h4 className="font-medium text-foreground mb-2">Configuration Parameters</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {selectedTemplate.parameters.map((param) => (
+                        <div key={param.name} className="space-y-2">
+                          <Label className="text-sm font-medium">{param.label}</Label>
+                          <p className="text-xs text-muted-foreground">{param.description}</p>
+                          <div className="px-3 py-2 bg-muted rounded-md text-sm">
+                            Default: {String(param.defaultValue)}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Use Cases */}
                 <div>
@@ -919,19 +585,22 @@ export default function Templates() {
                       />
                     )}
                     {param.type === 'select' && param.options && (
-                      <select
-                        id={param.name}
+                      <Select
                         value={importParams[param.name] || ''}
-                        onChange={(e) => setImportParams(prev => ({
+                        onValueChange={(value) => setImportParams(prev => ({
                           ...prev,
-                          [param.name]: e.target.value
+                          [param.name]: value
                         }))}
-                        className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm"
                       >
-                        {param.options.map(option => (
-                          <option key={option} value={option}>{option}</option>
-                        ))}
-                      </select>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select an option" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {param.options.map(option => (
+                            <SelectItem key={option} value={option}>{option}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     )}
                     <p className="text-xs text-muted-foreground">{param.description}</p>
                   </div>

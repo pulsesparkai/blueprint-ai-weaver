@@ -31,7 +31,49 @@ interface IntegrationForm {
   credentials: any;
 }
 
-const INTEGRATION_TYPES = [
+export default function IntegrationsPage() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [integrations, setIntegrations] = useState<Integration[]>([]);
+  const [integrationTypes, setIntegrationTypes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [testingIntegration, setTestingIntegration] = useState<string | null>(null);
+  const [form, setForm] = useState<IntegrationForm>({
+    name: '',
+    type: '',
+    config: {},
+    credentials: {}
+  });
+
+  useEffect(() => {
+    if (user) {
+      Promise.all([
+        loadIntegrations(),
+        loadIntegrationTypes()
+      ]);
+    }
+  }, [user]);
+
+  const loadIntegrationTypes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('integration_types')
+        .select('*')
+        .order('category', { ascending: true });
+
+      if (error) throw error;
+      setIntegrationTypes(data || []);
+    } catch (error: any) {
+      toast({
+        title: "Failed to load integration types",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
+
+const FALLBACK_INTEGRATION_TYPES = [
   // Vector Databases
   {
     id: 'pinecone',
@@ -266,19 +308,6 @@ const INTEGRATION_TYPES = [
   }
 ];
 
-export default function IntegrationsPage() {
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const [integrations, setIntegrations] = useState<Integration[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [testingIntegration, setTestingIntegration] = useState<string | null>(null);
-  const [form, setForm] = useState<IntegrationForm>({
-    name: '',
-    type: '',
-    config: {},
-    credentials: {}
-  });
 
   useEffect(() => {
     if (user) {
@@ -464,7 +493,8 @@ export default function IntegrationsPage() {
     }
   };
 
-  const selectedIntegrationType = INTEGRATION_TYPES.find(t => t.id === form.type);
+  const availableTypes = integrationTypes.length > 0 ? integrationTypes : FALLBACK_INTEGRATION_TYPES;
+  const selectedIntegrationType = availableTypes.find(t => t.id === form.type);
 
   if (loading) {
     return (
@@ -518,12 +548,12 @@ export default function IntegrationsPage() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className="text-2xl">
-                          {INTEGRATION_TYPES.find(t => t.id === integration.type)?.icon || '🔗'}
+                          {availableTypes.find(t => t.id === integration.type)?.icon || '🔗'}
                         </div>
                         <div>
                           <CardTitle className="text-lg">{integration.name}</CardTitle>
                           <CardDescription>
-                            {INTEGRATION_TYPES.find(t => t.id === integration.type)?.name || integration.type}
+                            {availableTypes.find(t => t.id === integration.type)?.name || integration.type}
                           </CardDescription>
                         </div>
                       </div>
@@ -593,7 +623,7 @@ export default function IntegrationsPage() {
             {['vector-db', 'knowledge', 'productivity', 'automation'].map((category) => (
               <TabsContent key={category} value={category} className="space-y-4">
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {INTEGRATION_TYPES
+                  {availableTypes
                     .filter(type => type.category === category || 
                       (category === 'productivity' && ['crm', 'creative', 'forms'].includes(type.category || '')) ||
                       (category === 'automation' && type.category === 'automation'))
@@ -666,7 +696,7 @@ export default function IntegrationsPage() {
                     <SelectValue placeholder="Select a provider" />
                   </SelectTrigger>
                   <SelectContent>
-                    {INTEGRATION_TYPES.map((type) => (
+                    {availableTypes.map((type) => (
                       <SelectItem key={type.id} value={type.id}>
                         <div className="flex items-center gap-2">
                           <span>{type.icon}</span>
@@ -687,7 +717,7 @@ export default function IntegrationsPage() {
                 </TabsList>
 
                 <TabsContent value="config" className="space-y-4">
-                  {selectedIntegrationType.fields.config.map((field) => (
+                  {(selectedIntegrationType.config_fields || selectedIntegrationType.fields?.config || []).map((field: any) => (
                     <div key={field.key}>
                       <Label htmlFor={field.key}>{field.label}</Label>
                       {field.type === 'select' ? (
@@ -720,12 +750,12 @@ export default function IntegrationsPage() {
                 </TabsContent>
 
                 <TabsContent value="credentials" className="space-y-4">
-                  {selectedIntegrationType.fields.credentials.length === 0 ? (
+                  {(selectedIntegrationType.credential_fields || selectedIntegrationType.fields?.credentials || []).length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
                       No credentials required for this integration type
                     </div>
                   ) : (
-                    selectedIntegrationType.fields.credentials.map((field) => (
+                    (selectedIntegrationType.credential_fields || selectedIntegrationType.fields?.credentials || []).map((field: any) => (
                       <div key={field.key}>
                         <Label htmlFor={field.key}>{field.label}</Label>
                         <Input

@@ -103,14 +103,19 @@ export type Database = {
           description: string
           difficulty: string
           edges: Json
+          estimated_time: string | null
           id: string
+          instructions: string | null
           name: string
           nodes: Json
+          parameters: Json | null
+          preview_image: string | null
           tags: string[] | null
           thumbnail: string | null
           tier: string
           updated_at: string
           usage_count: number
+          use_cases: string[] | null
         }
         Insert: {
           category?: string
@@ -118,14 +123,19 @@ export type Database = {
           description: string
           difficulty?: string
           edges?: Json
+          estimated_time?: string | null
           id?: string
+          instructions?: string | null
           name: string
           nodes?: Json
+          parameters?: Json | null
+          preview_image?: string | null
           tags?: string[] | null
           thumbnail?: string | null
           tier?: string
           updated_at?: string
           usage_count?: number
+          use_cases?: string[] | null
         }
         Update: {
           category?: string
@@ -133,14 +143,19 @@ export type Database = {
           description?: string
           difficulty?: string
           edges?: Json
+          estimated_time?: string | null
           id?: string
+          instructions?: string | null
           name?: string
           nodes?: Json
+          parameters?: Json | null
+          preview_image?: string | null
           tags?: string[] | null
           thumbnail?: string | null
           tier?: string
           updated_at?: string
           usage_count?: number
+          use_cases?: string[] | null
         }
         Relationships: []
       }
@@ -424,6 +439,48 @@ export type Database = {
           expires_at?: string
           id?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      integration_types: {
+        Row: {
+          category: string
+          config_fields: Json | null
+          created_at: string
+          credential_fields: Json | null
+          description: string
+          icon: string
+          id: string
+          is_oauth: boolean | null
+          name: string
+          tier: string | null
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          config_fields?: Json | null
+          created_at?: string
+          credential_fields?: Json | null
+          description: string
+          icon: string
+          id: string
+          is_oauth?: boolean | null
+          name: string
+          tier?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          config_fields?: Json | null
+          created_at?: string
+          credential_fields?: Json | null
+          description?: string
+          icon?: string
+          id?: string
+          is_oauth?: boolean | null
+          name?: string
+          tier?: string | null
+          updated_at?: string
         }
         Relationships: []
       }

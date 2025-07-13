@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -350,6 +351,30 @@ export function RAGAutoConfigDemo() {
   const [appliedConfig, setAppliedConfig] = useState<any>(null);
   const { toast } = useToast();
 
+  const [ragAnalyses, setRagAnalyses] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+
+  useEffect(() => {
+    loadRagAnalyses();
+  }, []);
+
+  const loadRagAnalyses = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('rag_analyses')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+      setRagAnalyses(data || []);
+    } catch (error: any) {
+      console.error('Error loading RAG analyses:', error);
+    }
+  };
+
   const createMockFile = (datasetKey: keyof typeof mockDatasets) => {
     const dataset = mockDatasets[datasetKey];
     const blob = new Blob([dataset.content], { type: 'text/plain' });
@@ -371,6 +396,53 @@ export function RAGAutoConfigDemo() {
       title: "Dataset Downloaded",
       description: `${mockDatasets[datasetKey].name} saved to your downloads folder`
     });
+  };
+
+  const handleFileUpload = async (file: File) => {
+    setUploadedFile(file);
+    setAnalyzing(true);
+
+    try {
+      // Upload file to Supabase Storage
+      const fileName = `${Date.now()}-${file.name}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('rag-datasets')
+        .upload(`${selectedDataset}/${fileName}`, file);
+
+      if (uploadError) throw uploadError;
+
+      // Call RAG auto-config edge function
+      const { data, error } = await supabase.functions.invoke('rag-auto-config', {
+        body: {
+          filename: fileName,
+          fileSize: file.size,
+          filePath: uploadData.path
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        setAppliedConfig(data.optimalConfig);
+        toast({
+          title: "Analysis Complete",
+          description: "RAG configuration has been optimized for your dataset"
+        });
+        
+        // Refresh analyses list
+        await loadRagAnalyses();
+      } else {
+        throw new Error(data.error || 'Analysis failed');
+      }
+    } catch (error: any) {
+      toast({
+        title: "Analysis Failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setAnalyzing(false);
+    }
   };
 
   const openOptimizer = (datasetKey: keyof typeof mockDatasets) => {
