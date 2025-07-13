@@ -309,14 +309,33 @@ class EnhancedPipelineSimulator {
 
     const { topK = 3, scoreThreshold = 0.7, indexName = 'default' } = node.data || {};
     
-    // Mock vector search (in production, this would call Pinecone, Weaviate, or pgvector)
-    const mockSearchResults = [
-      { content: `Relevant information about ${input}`, score: 0.95 },
-      { content: `Additional context for ${input}`, score: 0.87 },
-      { content: `Background details on ${input}`, score: 0.76 }
-    ].slice(0, topK).filter(result => result.score >= scoreThreshold);
+    // Real vector search implementation
+    let searchResults = [];
+    
+    try {
+      // Get vector store configuration from node data
+      const { vectorStore, embeddings } = node.data || {};
+      
+      if (vectorStore?.provider === 'pinecone' && vectorStore?.apiKey) {
+        searchResults = await this.searchPinecone(input, vectorStore, topK, scoreThreshold);
+      } else if (vectorStore?.provider === 'weaviate' && vectorStore?.endpoint) {
+        searchResults = await this.searchWeaviate(input, vectorStore, topK, scoreThreshold);
+      } else {
+        // Fallback to mock results if no real vector store configured
+        searchResults = [
+          { content: `Relevant information about ${input}`, score: 0.95 },
+          { content: `Additional context for ${input}`, score: 0.87 },
+          { content: `Background details on ${input}`, score: 0.76 }
+        ].slice(0, topK).filter(result => result.score >= scoreThreshold);
+      }
+    } catch (error) {
+      console.warn('Vector search failed, using mock results:', error);
+      searchResults = [
+        { content: `Fallback context for ${input}`, score: 0.8 }
+      ];
+    }
 
-    const context = mockSearchResults.map(result => result.content).join('\n\n');
+    const context = searchResults.map(result => result.content).join('\n\n');
     const ragPrompt = `Context:\n${context}\n\nQuestion: ${input}\n\nAnswer based on the context:`;
 
     // Call LLM with RAG context
@@ -487,6 +506,92 @@ class EnhancedPipelineSimulator {
       content: data.choices[0].message.content,
       usage: data.usage
     };
+  }
+
+  private async searchPinecone(query: string, config: any, topK: number, scoreThreshold: number): Promise<any[]> {
+    const response = await fetch(`https://${config.indexName}-${config.projectId}.svc.${config.environment}.pinecone.io/query`, {
+      method: 'POST',
+      headers: {
+        'Api-Key': config.apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        vector: await this.getQueryEmbedding(query, config.embeddingApiKey),
+        topK,
+        includeMetadata: true,
+        namespace: config.namespace || ''
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Pinecone query failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.matches?.map((match: any) => ({
+      content: match.metadata?.text || '',
+      score: match.score,
+      metadata: match.metadata
+    })).filter((result: any) => result.score >= scoreThreshold) || [];
+  }
+
+  private async searchWeaviate(query: string, config: any, topK: number, scoreThreshold: number): Promise<any[]> {
+    const response = await fetch(`${config.endpoint}/v1/graphql`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(config.apiKey ? { 'Authorization': `Bearer ${config.apiKey}` } : {})
+      },
+      body: JSON.stringify({
+        query: `{
+          Get {
+            ${config.className}(
+              nearText: { concepts: ["${query}"] }
+              limit: ${topK}
+            ) {
+              text
+              _additional { certainty }
+            }
+          }
+        }`
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Weaviate query failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const results = data.data?.Get?.[config.className] || [];
+    
+    return results
+      .map((item: any) => ({
+        content: item.text || '',
+        score: item._additional?.certainty || 0,
+        metadata: item
+      }))
+      .filter((result: any) => result.score >= scoreThreshold);
+  }
+
+  private async getQueryEmbedding(text: string, apiKey: string): Promise<number[]> {
+    const response = await fetch('https://api.openai.com/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'text-embedding-ada-002',
+        input: text
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Embedding generation failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.data[0].embedding;
   }
 
   private calculateCost(provider: string, model: string, usage: any): number {

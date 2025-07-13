@@ -338,6 +338,75 @@ class RAGOptimizer {
       }
     };
   }
+
+  static async extractTextFromFile(fileData: Blob, filePath: string): Promise<string> {
+    const fileName = filePath.toLowerCase();
+    
+    try {
+      if (fileName.endsWith('.txt') || fileName.endsWith('.md')) {
+        return await fileData.text();
+      }
+      
+      if (fileName.endsWith('.csv')) {
+        const csvText = await fileData.text();
+        // Simple CSV to text conversion
+        return csvText.split('\n').map(line => {
+          const values = line.split(',').map(v => v.trim().replace(/^"(.*)"$/, '$1'));
+          return values.join(' ');
+        }).join('\n');
+      }
+      
+      if (fileName.endsWith('.json')) {
+        const jsonText = await fileData.text();
+        const jsonData = JSON.parse(jsonText);
+        
+        // Extract text content from JSON
+        return RAGOptimizer.extractTextFromJson(jsonData);
+      }
+      
+      if (fileName.endsWith('.pdf')) {
+        // For PDF files, we'd need a PDF parser library
+        // For now, throw an error suggesting text extraction
+        throw new Error('PDF files require text extraction. Please convert to .txt first.');
+      }
+      
+      if (fileName.endsWith('.docx')) {
+        // For DOCX files, we'd need a DOCX parser library
+        // For now, throw an error suggesting text extraction
+        throw new Error('DOCX files require text extraction. Please convert to .txt first.');
+      }
+      
+      // Default to treating as text
+      return await fileData.text();
+      
+    } catch (error) {
+      throw new Error(`Failed to extract text from ${fileName}: ${error.message}`);
+    }
+  }
+
+  static extractTextFromJson(obj: any, maxDepth: number = 5): string {
+    if (maxDepth <= 0) return '';
+    
+    if (typeof obj === 'string') {
+      return obj;
+    }
+    
+    if (typeof obj === 'number' || typeof obj === 'boolean') {
+      return String(obj);
+    }
+    
+    if (Array.isArray(obj)) {
+      return obj.map(item => RAGOptimizer.extractTextFromJson(item, maxDepth - 1)).join(' ');
+    }
+    
+    if (typeof obj === 'object' && obj !== null) {
+      return Object.values(obj)
+        .map(value => RAGOptimizer.extractTextFromJson(value, maxDepth - 1))
+        .join(' ');
+    }
+    
+    return '';
+  }
 }
 
 serve(async (req) => {
@@ -400,8 +469,8 @@ serve(async (req) => {
       throw new Error(`Failed to download file: ${downloadError.message}`);
     }
 
-    // Convert file to text
-    const content = await fileData.text();
+    // Convert file to text based on file type
+    const content = await RAGOptimizer.extractTextFromFile(fileData, filePath);
     
     if (content.length > 1000000) { // 1MB limit for analysis
       throw new Error('File too large for analysis (max 1MB)');

@@ -361,11 +361,246 @@ async function validateIntegration(type: string, config: any, credentials: any):
     case 'trello':
     case 'evernote':
     case 'todoist':
+      return await this.validateTodoist(credentials);
+    
+    case 'evernote':
+      return await this.validateEvernote(credentials);
+      
+    case 'typeform':
+      return await this.validateTypeform(credentials);
+      
+    case 'canva':
+      return await this.validateCanva(credentials);
+      
+    case 'salesforce':
+      return await this.validateSalesforce(credentials);
+      
+    case 'microsoft-365':
+      return await this.validateMicrosoft365(credentials);
+      
+    case 'google-workspace':
+      return await this.validateGoogleWorkspace(credentials);
+      
+    case 'trello':
+      return { success: true, metadata: { type } };
     case 'canva':
     case 'typeform':
       return { success: true, metadata: { type } };
     default:
       return { success: false, error: `Unsupported integration type: ${type}` };
+  }
+
+  private async validateTodoist(credentials: any): Promise<ValidationResult> {
+    try {
+      const response = await fetch('https://api.todoist.com/rest/v2/projects', {
+        headers: {
+          'Authorization': `Bearer ${credentials.api_token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Todoist API error: ${response.status}`);
+      }
+
+      const projects = await response.json();
+      return {
+        isValid: true,
+        message: `Successfully connected to Todoist with ${projects.length} projects`,
+        metadata: { projectCount: projects.length }
+      };
+    } catch (error) {
+      return {
+        isValid: false,
+        message: error.message,
+        error: error.message
+      };
+    }
+  }
+
+  private async validateEvernote(credentials: any): Promise<ValidationResult> {
+    try {
+      // Evernote uses OAuth, so we validate the access token
+      const response = await fetch('https://sandbox-api.evernote.com/v1/user', {
+        headers: {
+          'Authorization': `Bearer ${credentials.access_token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Evernote API error: ${response.status}`);
+      }
+
+      const user = await response.json();
+      return {
+        isValid: true,
+        message: `Successfully connected to Evernote as ${user.name}`,
+        metadata: { username: user.name }
+      };
+    } catch (error) {
+      return {
+        isValid: false,
+        message: error.message,
+        error: error.message
+      };
+    }
+  }
+
+  private async validateTypeform(credentials: any): Promise<ValidationResult> {
+    try {
+      const response = await fetch('https://api.typeform.com/me', {
+        headers: {
+          'Authorization': `Bearer ${credentials.access_token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Typeform API error: ${response.status}`);
+      }
+
+      const user = await response.json();
+      return {
+        isValid: true,
+        message: `Successfully connected to Typeform as ${user.email}`,
+        metadata: { email: user.email }
+      };
+    } catch (error) {
+      return {
+        isValid: false,
+        message: error.message,
+        error: error.message
+      };
+    }
+  }
+
+  private async validateCanva(credentials: any): Promise<ValidationResult> {
+    try {
+      const response = await fetch('https://api.canva.com/v1/me', {
+        headers: {
+          'Authorization': `Bearer ${credentials.access_token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Canva API error: ${response.status}`);
+      }
+
+      const user = await response.json();
+      return {
+        isValid: true,
+        message: `Successfully connected to Canva`,
+        metadata: { userId: user.id }
+      };
+    } catch (error) {
+      return {
+        isValid: false,
+        message: error.message,
+        error: error.message
+      };
+    }
+  }
+
+  private async validateSalesforce(credentials: any): Promise<ValidationResult> {
+    try {
+      const response = await fetch(`${credentials.instance_url}/services/data/v57.0/sobjects/`, {
+        headers: {
+          'Authorization': `Bearer ${credentials.access_token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Salesforce API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return {
+        isValid: true,
+        message: `Successfully connected to Salesforce with ${data.sobjects.length} object types`,
+        metadata: { objectCount: data.sobjects.length }
+      };
+    } catch (error) {
+      return {
+        isValid: false,
+        message: error.message,
+        error: error.message
+      };
+    }
+  }
+
+  private async validateMicrosoft365(credentials: any): Promise<ValidationResult> {
+    try {
+      const response = await fetch('https://graph.microsoft.com/v1.0/me', {
+        headers: {
+          'Authorization': `Bearer ${credentials.access_token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Microsoft Graph API error: ${response.status}`);
+      }
+
+      const user = await response.json();
+      return {
+        isValid: true,
+        message: `Successfully connected to Microsoft 365 as ${user.displayName}`,
+        metadata: { displayName: user.displayName, userPrincipalName: user.userPrincipalName }
+      };
+    } catch (error) {
+      return {
+        isValid: false,
+        message: error.message,
+        error: error.message
+      };
+    }
+  }
+
+  private async validateGoogleWorkspace(credentials: any): Promise<ValidationResult> {
+    try {
+      const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: {
+          'Authorization': `Bearer ${credentials.access_token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Google API error: ${response.status}`);
+      }
+
+      const user = await response.json();
+      return {
+        isValid: true,
+        message: `Successfully connected to Google Workspace as ${user.email}`,
+        metadata: { email: user.email, name: user.name }
+      };
+    } catch (error) {
+      return {
+        isValid: false,
+        message: error.message,
+        error: error.message
+      };
+    }
+  }
+
+  private async validateTrello(credentials: any): Promise<ValidationResult> {
+    try {
+      const response = await fetch(`https://api.trello.com/1/members/me?key=${credentials.api_key}&token=${credentials.access_token}`);
+
+      if (!response.ok) {
+        throw new Error(`Trello API error: ${response.status}`);
+      }
+
+      const user = await response.json();
+      return {
+        isValid: true,
+        message: `Successfully connected to Trello as ${user.fullName}`,
+        metadata: { username: user.username, fullName: user.fullName }
+      };
+    } catch (error) {
+      return {
+        isValid: false,
+        message: error.message,
+        error: error.message
+      };
+    }
   }
 }
 
