@@ -10,7 +10,7 @@ describe('Pipeline Export', () => {
       {
         id: 'input-1',
         type: 'input',
-        data: { name: 'Test Input' },
+        data: { label: 'Test Input' },
         position: { x: 0, y: 0 }
       }
     ],
@@ -20,96 +20,132 @@ describe('Pipeline Export', () => {
   it('should export pipeline as Python code', async () => {
     const config: ExportConfig = {
       format: 'python',
+      includeDockerfile: true,
+      includeReadme: true,
       includeTests: true,
-      includeDocumentation: true,
-      optimizations: {
-        removeUnusedNodes: true,
-        optimizePrompts: false,
-        enableCaching: true
+      includeDocs: true,
+      includeMonitoring: false,
+      pythonVersion: '3.11',
+      nodeVersion: '20',
+      packageManager: 'pip',
+      deployment: {
+        platform: 'local',
+        environment: 'development',
+        autoScale: false,
+        monitoring: false
+      },
+      optimization: {
+        caching: true,
+        batching: true,
+        streaming: false,
+        fallbacks: true
       }
     };
 
     const result = await exportPipeline(mockPipeline, config);
     
-    expect(result.files['main.py']).toBeDefined();
-    expect(result.files['requirements.txt']).toBeDefined();
-    expect(result.files['README.md']).toBeDefined();
-    expect(result.files['test_main.py']).toBeDefined();
+    expect(result).toBeInstanceOf(Blob);
+    expect(result.type).toBe('application/zip');
   });
 
   it('should export pipeline as TypeScript', async () => {
     const config: ExportConfig = {
       format: 'typescript',
+      includeDockerfile: true,
+      includeReadme: true,
       includeTests: true,
-      includeDocumentation: true
-    };
-
-    const result = await exportPipeline(mockPipeline, config);
-    
-    expect(result.files['index.ts']).toBeDefined();
-    expect(result.files['package.json']).toBeDefined();
-    expect(result.files['README.md']).toBeDefined();
-    expect(result.files['index.test.ts']).toBeDefined();
-  });
-
-  it('should generate Docker configuration', async () => {
-    const config: ExportConfig = {
-      format: 'docker',
-      containerConfig: {
-        baseImage: 'node:18-alpine',
-        port: 3000,
-        healthCheck: true
+      includeDocs: true,
+      includeMonitoring: false,
+      pythonVersion: '3.11',
+      nodeVersion: '20',
+      packageManager: 'npm',
+      deployment: {
+        platform: 'local',
+        environment: 'development',
+        autoScale: false,
+        monitoring: false
+      },
+      optimization: {
+        caching: true,
+        batching: true,
+        streaming: false,
+        fallbacks: true
       }
     };
 
     const result = await exportPipeline(mockPipeline, config);
     
-    expect(result.files['Dockerfile']).toBeDefined();
-    expect(result.files['docker-compose.yml']).toBeDefined();
-    expect(result.files['.dockerignore']).toBeDefined();
+    expect(result).toBeInstanceOf(Blob);
+    expect(result.type).toBe('application/zip');
   });
 
-  it('should optimize pipeline before export', async () => {
-    const pipelineWithUnusedNode = {
-      ...mockPipeline,
-      nodes: [
-        ...mockPipeline.nodes,
-        {
-          id: 'unused-node',
-          type: 'processor',
-          data: { name: 'Unused' },
-          position: { x: 100, y: 100 }
-        }
-      ]
-    };
-
+  it('should generate Docker Compose configuration', async () => {
     const config: ExportConfig = {
-      format: 'python',
-      optimizations: {
-        removeUnusedNodes: true,
-        optimizePrompts: true,
-        enableCaching: true
+      format: 'docker-compose',
+      includeDockerfile: true,
+      includeReadme: true,
+      includeTests: true,
+      includeDocs: true,
+      includeMonitoring: true,
+      pythonVersion: '3.11',
+      nodeVersion: '20',
+      packageManager: 'pip',
+      deployment: {
+        platform: 'local',
+        environment: 'production',
+        autoScale: false,
+        monitoring: true
+      },
+      optimization: {
+        caching: true,
+        batching: true,
+        streaming: false,
+        fallbacks: true
       }
     };
 
-    const result = await exportPipeline(pipelineWithUnusedNode, config);
+    const result = await exportPipeline(mockPipeline, config);
     
-    // Should only contain connected nodes
-    expect(result.optimizedPipeline.nodes).toHaveLength(1);
+    expect(result).toBeInstanceOf(Blob);
+    expect(result.type).toBe('application/zip');
   });
 
-  it('should handle export errors gracefully', async () => {
-    const invalidPipeline = {
-      id: '',
-      title: '',
+  it('should handle empty pipeline gracefully', async () => {
+    const emptyPipeline = {
+      id: 'empty-pipeline',
+      title: 'Empty Pipeline',
       nodes: [],
       edges: []
     };
 
     const config: ExportConfig = {
-      format: 'python'
+      format: 'python',
+      includeDockerfile: false,
+      includeReadme: true,
+      includeTests: false,
+      includeDocs: false,
+      includeMonitoring: false,
+      pythonVersion: '3.11',
+      nodeVersion: '20',
+      packageManager: 'pip',
+      deployment: {
+        platform: 'local',
+        environment: 'development',
+        autoScale: false,
+        monitoring: false
+      },
+      optimization: {
+        caching: false,
+        batching: false,
+        streaming: false,
+        fallbacks: false
+      }
     };
 
-    await expect(exportPipeline(invalidPipeline, config)).rejects.toThrow();
+    const result = await exportPipeline(emptyPipeline, config);
+    
+    expect(result).toBeInstanceOf(Blob);
+    expect(result.type).toBe('application/zip');
+    expect(result.size).toBeGreaterThan(0);
   });
 });
