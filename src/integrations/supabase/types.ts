@@ -1537,6 +1537,10 @@ export type Database = {
         Args: { optimization_id: string }
         Returns: boolean
       }
+      check_integration_health: {
+        Args: { p_integration_id: string }
+        Returns: Json
+      }
       check_rate_limit: {
         Args: {
           p_user_id: string

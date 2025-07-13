@@ -15,6 +15,7 @@ export class LLMExecutor {
         temperature?: number;
         maxTokens?: number;
         integrationId?: string;
+        systemPrompt?: string;
       } || {};
       
       const model = config.model || 'gpt-4o-mini';
@@ -36,14 +37,15 @@ export class LLMExecutor {
         inputText = JSON.stringify(context.data);
       }
       
-      // Call LLM API Edge Function
-      const { data, error } = await supabase.functions.invoke('api-llm', {
+      // Call enhanced LLM processor
+      const { data, error } = await supabase.functions.invoke('enhanced-llm-processor', {
         body: {
-          integration_id: integrationId,
-          prompt: inputText,
+          integrationId,
           model,
+          prompt: inputText,
           temperature,
-          max_tokens: maxTokens
+          maxTokens,
+          systemPrompt: config.systemPrompt
         }
       });
       
@@ -54,11 +56,14 @@ export class LLMExecutor {
       const result = {
         type: 'llm',
         originalInput: inputText,
-        llmResponse: data.response,
+        llmResponse: data.data?.choices?.[0]?.message?.content || data.data?.content?.[0]?.text || data.response,
         model,
         temperature,
         maxTokens,
-        tokensUsed: data.tokens_used || 0,
+        tokensUsed: data.metadata?.usage?.total_tokens || data.tokens_used || 0,
+        cost: data.metadata?.cost || 0,
+        provider: data.metadata?.provider || 'unknown',
+        responseTime: data.metadata?.responseTime || 0,
         timestamp: new Date().toISOString(),
         nodeId: node.id
       };

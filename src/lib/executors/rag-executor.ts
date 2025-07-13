@@ -38,12 +38,13 @@ export class RAGExecutor {
       
       const formattedQuery = queryTemplate.replace('{query}', query);
       
-      // Call RAG API Edge Function
-      const { data, error } = await supabase.functions.invoke('api-rag', {
+      // Call enhanced vector operations
+      const { data, error } = await supabase.functions.invoke('enhanced-vector-operations', {
         body: {
-          integration_id: integrationId,
+          integrationId,
+          operation: 'search',
           query: formattedQuery,
-          top_k: topK
+          topK
         }
       });
       
