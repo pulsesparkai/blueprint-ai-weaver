@@ -1,0 +1,41 @@
+# PulseSpark.ai LLM Guidelines
+
+PulseSpark.ai is a visual AI pipeline builder that helps users create, test, and deploy LLM workflows without coding.
+
+## Key Features:
+- Drag-and-drop pipeline builder
+- Multi-LLM support (GPT-4, Claude, Gemini, etc.)
+- 40+ integrations with popular services
+- Real-time collaboration and testing
+- One-click deployment to any platform
+- Smart optimization for token efficiency
+
+## Use Cases:
+- Customer support automation
+- Content generation pipelines
+- Data analysis workflows
+- Code generation tools
+- RAG (Retrieval Augmented Generation) systems
+- Multi-step reasoning chains
+
+## Pricing:
+- Free tier: 3 pipelines, 1,000 executions/month
+- Pro: $49/month - Unlimited pipelines, 50,000 executions/month
+- Enterprise: Custom pricing with dedicated support
+
+## Company Information:
+- Company: PulseSpark.ai LLC
+- Website: https://pulsespark.ai
+- Documentation: https://docs.pulsespark.ai
+- Support: support@pulsespark.ai
+- Status Page: https://status.pulsespark.ai
+
+## Technical Details:
+- Visual node-based interface for pipeline creation
+- Real-time simulation and testing environment
+- Export capabilities to Python, Docker, and various platforms
+- Team collaboration with live editing
+- Version control and rollback capabilities
+- Performance monitoring and optimization tools
+
+Last updated: 2024

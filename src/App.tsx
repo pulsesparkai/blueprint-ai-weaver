@@ -13,6 +13,7 @@ import { OnboardingTour } from "@/components/OnboardingTour";
 import { CookieConsent } from "@/components/CookieConsent";
 
 // Lazy load pages for code splitting
+const Landing = lazy(() => import("./pages/Landing"));
 const Index = lazy(() => import("./pages/Index"));
 const Auth = lazy(() => import("./pages/Auth"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -42,20 +43,27 @@ const App = () => (
             <Toaster />
             <Sonner />
             <OnboardingTour isOpen={false} onClose={() => {}} onUpgradePrompt={() => {}} />
+            <CookieConsent />
             <BrowserRouter>
               <KeyboardShortcuts />
               <Suspense fallback={<LoadingSpinner />}>
                 <Routes>
-                  <Route path="/" element={<Index />} />
+                  <Route path="/" element={<Landing />} />
+                  <Route path="/dashboard" element={<Index />} />
                   <Route path="/auth" element={<Auth />} />
-                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/billing" element={<Billing />} />
                   <Route path="/editor/:id?" element={<Editor />} />
                   <Route path="/templates" element={<Templates />} />
                   <Route path="/integrations" element={<Integrations />} />
                   <Route path="/integrations/oauth-callback" element={<IntegrationsOAuthCallback />} />
                   <Route path="/test-integrations" element={<TestIntegrations />} />
                   <Route path="/api-keys" element={<ApiKeys />} />
-                  <Route path="/billing" element={<Billing />} />
+                  <Route path="/terms" element={<TermsOfService />} />
+                  <Route path="/privacy" element={<PrivacyPolicy />} />
+                  <Route path="/data-export" element={<DataExport />} />
+                  <Route path="/status" element={<StatusPage />} />
+                  <Route path="/api-docs" element={<ApiDocs />} />
+                  <Route path="/support" element={<Support />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>
