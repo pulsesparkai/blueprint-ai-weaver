@@ -5,17 +5,24 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ThemeProvider } from "./components/ThemeProvider";
-import Index from "./pages/Index";
-import Auth from "./pages/Auth";
-import Dashboard from "./pages/Dashboard";
-import Editor from "./pages/Editor";
-import Templates from "./pages/Templates";
-import Integrations from "./pages/Integrations";
-import IntegrationsOAuthCallback from "./pages/IntegrationsOAuthCallback";
-import ApiKeys from "./pages/ApiKeys";
-import TestIntegrations from "./pages/TestIntegrations";
-import Billing from "./pages/Billing";
-import NotFound from "./pages/NotFound";
+import { Suspense, lazy } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
+import { OnboardingTour } from "@/components/OnboardingTour";
+
+// Lazy load pages for code splitting
+const Index = lazy(() => import("./pages/Index"));
+const Auth = lazy(() => import("./pages/Auth"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Editor = lazy(() => import("./pages/Editor"));
+const Templates = lazy(() => import("./pages/Templates"));
+const Integrations = lazy(() => import("./pages/Integrations"));
+const IntegrationsOAuthCallback = lazy(() => import("./pages/IntegrationsOAuthCallback"));
+const ApiKeys = lazy(() => import("./pages/ApiKeys"));
+const TestIntegrations = lazy(() => import("./pages/TestIntegrations"));
+const Billing = lazy(() => import("./pages/Billing"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
 
@@ -24,24 +31,29 @@ const App = () => (
     <ThemeProvider defaultTheme="dark">
       <AuthProvider>
         <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/editor/:id?" element={<Editor />} />
-          <Route path="/templates" element={<Templates />} />
-          <Route path="/integrations" element={<Integrations />} />
-          <Route path="/integrations/oauth-callback" element={<IntegrationsOAuthCallback />} />
-              <Route path="/test-integrations" element={<TestIntegrations />} />
-              <Route path="/api-keys" element={<ApiKeys />} />
-              <Route path="/billing" element={<Billing />} />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
+          <ErrorBoundary>
+            <Toaster />
+            <Sonner />
+            <KeyboardShortcuts />
+            <OnboardingTour isOpen={false} onClose={() => {}} onUpgradePrompt={() => {}} />
+            <BrowserRouter>
+              <Suspense fallback={<LoadingSpinner />}>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/auth" element={<Auth />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/editor/:id?" element={<Editor />} />
+                  <Route path="/templates" element={<Templates />} />
+                  <Route path="/integrations" element={<Integrations />} />
+                  <Route path="/integrations/oauth-callback" element={<IntegrationsOAuthCallback />} />
+                  <Route path="/test-integrations" element={<TestIntegrations />} />
+                  <Route path="/api-keys" element={<ApiKeys />} />
+                  <Route path="/billing" element={<Billing />} />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Suspense>
+            </BrowserRouter>
+          </ErrorBoundary>
         </TooltipProvider>
       </AuthProvider>
     </ThemeProvider>
