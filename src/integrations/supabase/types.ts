@@ -1563,6 +1563,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: number
       }
+      cleanup_old_data: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       cleanup_rate_limits: {
         Args: Record<PropertyKey, never>
         Returns: number
@@ -1583,6 +1587,10 @@ export type Database = {
         }
         Returns: string
       }
+      delete_user_data: {
+        Args: { p_user_id: string }
+        Returns: boolean
+      }
       encrypt_api_key: {
         Args: {
           p_user_id: string
@@ -1591,6 +1599,10 @@ export type Database = {
           p_passphrase: string
         }
         Returns: string
+      }
+      export_user_data: {
+        Args: { p_user_id: string }
+        Returns: Json
       }
       get_user_team_role: {
         Args: { _team_id: string; _user_id: string }

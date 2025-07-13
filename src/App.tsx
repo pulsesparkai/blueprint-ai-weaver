@@ -10,6 +10,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
 import { OnboardingTour } from "@/components/OnboardingTour";
+import { CookieConsent } from "@/components/CookieConsent";
 
 // Lazy load pages for code splitting
 const Index = lazy(() => import("./pages/Index"));
@@ -22,6 +23,12 @@ const IntegrationsOAuthCallback = lazy(() => import("./pages/IntegrationsOAuthCa
 const ApiKeys = lazy(() => import("./pages/ApiKeys"));
 const TestIntegrations = lazy(() => import("./pages/TestIntegrations"));
 const Billing = lazy(() => import("./pages/Billing"));
+const TermsOfService = lazy(() => import("./pages/TermsOfService"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const DataExport = lazy(() => import("./pages/DataExport"));
+const StatusPage = lazy(() => import("./pages/StatusPage"));
+const ApiDocs = lazy(() => import("./pages/ApiDocs"));
+const Support = lazy(() => import("./pages/Support"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
