@@ -34,9 +34,9 @@ const App = () => (
           <ErrorBoundary>
             <Toaster />
             <Sonner />
-            <KeyboardShortcuts />
             <OnboardingTour isOpen={false} onClose={() => {}} onUpgradePrompt={() => {}} />
             <BrowserRouter>
+              <KeyboardShortcuts />
               <Suspense fallback={<LoadingSpinner />}>
                 <Routes>
                   <Route path="/" element={<Index />} />
